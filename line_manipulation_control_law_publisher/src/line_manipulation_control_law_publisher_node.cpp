@@ -12,14 +12,12 @@ ros::Publisher joint4_torque_pub_;
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 {
     std_msgs::Float64 msg;
-    //msg.data = jointStatesPtr_->position[2];
-    msg.data = 0.0;
+    msg.data = 20*(0.0 - jointStatesPtr_->position[2]) + 1*(0.0 - jointStatesPtr_->velocity[2]);
+    
     joint1_torque_pub_.publish(msg);
-    //msg.data = jointStatesPtr_->position[3];
+    msg.data = 0.0;
     joint2_torque_pub_.publish(msg);
-    //msg.data = jointStatesPtr_->position[4];
     joint3_torque_pub_.publish(msg);
-    //msg.data = jointStatesPtr_->position[5];
     joint4_torque_pub_.publish(msg);
 }
 int main(int argc, char **argv)
