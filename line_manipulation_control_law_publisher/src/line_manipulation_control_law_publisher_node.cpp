@@ -3,6 +3,9 @@
 #include <sensor_msgs/JointState.h>
 #include <iostream>
 #include <memory>
+#include <moveit/robot_model_loader/robot_model_loader.h>
+#include <moveit/robot_model/robot_model.h>
+#include <moveit/robot_state/robot_state.h>
 
 ros::Publisher joint1_torque_pub_;
 ros::Publisher joint2_torque_pub_;
@@ -12,7 +15,7 @@ ros::Publisher joint4_torque_pub_;
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 {
     std_msgs::Float64 msg;
-    msg.data = 20*(0.0 - jointStatesPtr_->position[2]) + 1*(0.0 - jointStatesPtr_->velocity[2]);
+    msg.data = 10*(0.0 - jointStatesPtr_->position[2]) + 1*(0.0 - jointStatesPtr_->velocity[2]);
     
     joint1_torque_pub_.publish(msg);
     msg.data = 0.0;
