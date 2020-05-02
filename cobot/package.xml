@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>cobot</name>
+  <version>0.0.0</version>
+  <description>cobot is a metapackage for all cobot packages</description>
+  <maintainer email="drajabhandharaks@scu.edu">danoponline</maintainer>
+  <license>TODO</license>
+  
+  <buildtool_depend>catkin</buildtool_depend>
+  
+  <exec_depend>line_manipulation_control_law_publisher</exec_depend>
+
+  <export>
+    <metapackage/>
+  </export>
+
+</package>
