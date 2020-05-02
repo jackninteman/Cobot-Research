@@ -9,6 +9,7 @@
   <buildtool_depend>catkin</buildtool_depend>
   
   <exec_depend>line_manipulation_control_law_publisher</exec_depend>
+  <exec_depend>open_manipulator_moveit_config</exec_depend>
 
   <export>
     <metapackage/>
