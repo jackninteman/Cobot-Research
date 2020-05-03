@@ -16,7 +16,7 @@ int main(int argc, char **argv)
     robot_model::RobotModelPtr kinematic_model = robot_model_loader.getModel();
     
     robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(kinematic_model));
-    kinematic_state->setToDefaultValues();
+    //kinematic_state->setToDefaultValues();
     const robot_state::JointModelGroup* joint_model_group = kinematic_model->getJointModelGroup("arm");
     const std::vector<std::string>& joint_names = joint_model_group->getVariableNames();
 
@@ -28,17 +28,28 @@ int main(int argc, char **argv)
     }
     
     //Joint Limits
-    joint_values[0] = 5.57;
-    kinematic_state->setJointGroupPositions(joint_model_group,joint_values);
+    //joint_values[0] = 5.57;
+    //kinematic_state->setJointGroupPositions(joint_model_group,joint_values);
     ROS_INFO_STREAM("Current state is " << (kinematic_state->satisfiesBounds() ? "valid" : "not valid"));
     kinematic_state->enforceBounds();
     ROS_INFO_STREAM("Current state is " << (kinematic_state->satisfiesBounds() ? "valid" : "not valid"));
 
     //FW Kinematics
-    kinematic_state->setToRandomPositions(joint_model_group);
-    //const Eigen::Isometry3d& end_effector_state = kinematic_state->getGlobalLinkTransform("end_effector_link");
-    //ROS_INFO_STREAM("Translation: \n" << end_effector_state.translation() << "\n");
-    //ROS_INFO_STREAM("Rotation: \n" << end_effector_state.rotation() << "\n");
+    //kinematic_state->setToRandomPositions(joint_model_group);
+    const Eigen::Affine3d& end_effector_state = kinematic_state->getGlobalLinkTransform("end_effector_link");
+    ROS_INFO_STREAM("Translation: \n" << end_effector_state.translation() << "\n");
+    ROS_INFO_STREAM("Rotation: \n" << end_effector_state.rotation() << "\n");
+
+    std::cout << joint_model_group->getLinkModelNames().back() << std::endl;
+    //Get Jacobian
+    Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
+    Eigen::MatrixXd jacobian;
+    /*kinematic_state->getJacobian(joint_model_group,kinematic_state->getLinkModel(joint_model_group->getLinkModelNames().back()),
+      reference_point_position, jacobian);
+      */
+    kinematic_state->getJacobian(joint_model_group,kinematic_state->getLinkModel("end_effector_link"),
+      reference_point_position, jacobian); 
+    ROS_INFO_STREAM("Jacobian: \n" << jacobian << "\n");
     ros::shutdown();
     return 0;
 }
