@@ -10,6 +10,7 @@ add_compile_options(-std=c++11)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  ecl_geometry
   moveit_ros_planning_interface
 )
 
@@ -132,6 +133,7 @@ include_directories(include ${catkin_INCLUDE_DIRS})
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(line_manipulation_control_law_publisher_node src/line_manipulation_control_law_publisher_node.cpp)
 add_executable(test_jacobian_node src/test_jacobian_node.cpp)
+add_executable(test_line3d_node src/test_line3d_node.cpp src/line3d.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -146,6 +148,7 @@ add_executable(test_jacobian_node src/test_jacobian_node.cpp)
 ## Specify libraries to link a library or executable target against
 target_link_libraries(line_manipulation_control_law_publisher_node ${catkin_LIBRARIES})
 target_link_libraries(test_jacobian_node ${catkin_LIBRARIES})
+target_link_libraries(test_line3d_node ${catkin_LIBRARIES})
 #############
 ## Install ##
 #############
