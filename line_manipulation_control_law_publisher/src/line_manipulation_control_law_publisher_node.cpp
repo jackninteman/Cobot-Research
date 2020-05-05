@@ -17,7 +17,7 @@ std::vector<std::string>* joint_names_ptr;
 
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 { 
-    
+    //Setup for using FW kinematics and Jacobian
     std::vector<double> joint_values;
     kinematic_state->copyJointGroupPositions(joint_model_group,joint_values);
     joint_values[0] = jointStatesPtr_->position[2];
@@ -25,20 +25,63 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     joint_values[2] = jointStatesPtr_->position[4];
     joint_values[3] = jointStatesPtr_->position[5];
     kinematic_state->setJointGroupPositions(joint_model_group,joint_values);
+    Eigen::Matrix<double,4,1> joint_vel;
+    joint_vel[0] = jointStatesPtr_->velocity[2];
+    joint_vel[1] = jointStatesPtr_->velocity[3];
+    joint_vel[2] = jointStatesPtr_->velocity[4];
+    joint_vel[3] = jointStatesPtr_->velocity[5];
+
+    //Compute FW position kinematics
+    const Eigen::Affine3d& end_effector_state = kinematic_state->getGlobalLinkTransform("end_effector_link");
+    Eigen::Vector3d desired_position(0.288, 0, 0.193);
+    Eigen::Vector3d current_position(end_effector_state.translation());
+    Eigen::Quaterniond desired_orientation(1,0,0,0);
+    Eigen::Quaterniond current_orientation(end_effector_state.linear());
+    
+    //Compute position error
+    Eigen::Matrix<double,6,1> error;
+    error.head(3) << desired_position - current_position;
+    
+    //Compute orientation error
+    if(desired_orientation.coeffs().dot(current_orientation.coeffs()) < 0.0)
+    {
+        current_orientation.coeffs() << -current_orientation.coeffs();
+    }
+    Eigen::Quaterniond error_quaternion(current_orientation.inverse()*desired_orientation);
+    error.tail(3) << error_quaternion.x(), error_quaternion.y(), error_quaternion.z();
+    error.tail(3) << end_effector_state.linear()*error.tail(3);
+    
+    //Compute Jacobian
     Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);
     Eigen::MatrixXd jacobian;
-    kinematic_state->getJacobian(joint_model_group,kinematic_state->getLinkModel("end_effector_link"),
+    kinematic_state->getJacobian(joint_model_group,kinematic_state->getLinkModel("end_effector_link"), 
       reference_point_position, jacobian);
-    ROS_INFO_STREAM("Jacobian: \n" << jacobian << "\n");
+
+    //Specify stiffness and damping
+    Eigen::Matrix<double,6,6> cartesian_stiffness;
+    Eigen::Matrix<double,6,6> cartesian_damping;
+    cartesian_stiffness.setIdentity();
+    cartesian_damping.setIdentity();
+    cartesian_stiffness.topLeftCorner(3,3) << 20*Eigen::Matrix3d::Identity();
+    cartesian_stiffness.bottomRightCorner(3,3) << 2*Eigen::Matrix3d::Identity();
+    cartesian_damping.topLeftCorner(3,3) << 8.94*Eigen::Matrix3d::Identity();
+    cartesian_damping.bottomRightCorner(3,3) << 0.1*Eigen::Matrix3d::Identity();
+    
+    //Compute Control Law
+    Eigen::Matrix<double,4,1> tau_d = jacobian.transpose()*
+      (cartesian_stiffness*error + cartesian_damping*(-jacobian*joint_vel));
+    
+    //Publish Control Law to each joint
     std_msgs::Float64 msg;
-    msg.data = 10*(0.5 - jointStatesPtr_->position[2]) + 1*(0.0 - jointStatesPtr_->velocity[2]);
-    
+    msg.data = tau_d[0];
     joint1_torque_pub_.publish(msg);
-    msg.data = 0.0;
+     msg.data = tau_d[1];
     joint2_torque_pub_.publish(msg);
+    msg.data = tau_d[2];
     joint3_torque_pub_.publish(msg);
+    msg.data = tau_d[3];
     joint4_torque_pub_.publish(msg);
-    
+
 }
 int main(int argc, char **argv)
 {
