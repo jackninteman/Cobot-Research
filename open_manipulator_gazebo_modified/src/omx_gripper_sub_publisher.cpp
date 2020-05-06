@@ -16,7 +16,10 @@
 
 /* Authors: Darby Lim, Hye-Jong KIM, Ryan Shim, Yong-Ho Na */
 
+#include <ros/ros.h>
+#include <std_msgs/Float64.h>
 
+ros::Publisher gripper_joint_sub_pub;
 
 void gripperJointCallback(const std_msgs::Float64::ConstPtr& msg)
 {
