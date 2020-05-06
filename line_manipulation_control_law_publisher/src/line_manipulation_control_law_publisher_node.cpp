@@ -6,6 +6,7 @@
 #include <moveit/robot_model_loader/robot_model_loader.h>
 #include <moveit/robot_model/robot_model.h>
 #include <moveit/robot_state/robot_state.h>
+#include "line3d.h"
 
 ros::Publisher joint1_torque_pub_;
 ros::Publisher joint2_torque_pub_;
@@ -33,8 +34,18 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     //Compute FW position kinematics
     const Eigen::Affine3d& end_effector_state = kinematic_state->getGlobalLinkTransform("end_effector_link");
-    Eigen::Vector3d desired_position(0.288, 0, 0.193);
+    //Eigen::Vector3d desired_position(0.288, 0, 0.193);
     Eigen::Vector3d current_position(end_effector_state.translation());
+    //Setup line parameter
+    std::vector<double> a = {0,1,0};
+    std::vector<double> b = {0,0,0};
+    std::vector<double> c = {0,0,0.12};
+    //std::vector<double> a = {0,1,0};
+    //std::vector<double> b = {0,1,0};
+    //std::vector<double> c = {0,1,0};
+    Line3d line(a,b,c);
+    Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(end_effector_state.translation()));
+    
     Eigen::Quaterniond desired_orientation(1,0,0,0);
     Eigen::Quaterniond current_orientation(end_effector_state.linear());
     
@@ -50,6 +61,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Quaterniond error_quaternion(current_orientation.inverse()*desired_orientation);
     error.tail(3) << error_quaternion.x(), error_quaternion.y(), error_quaternion.z();
     error.tail(3) << end_effector_state.linear()*error.tail(3);
+    error.tail(3) << 0,0,0; //Don't care about orientation for now
     
     //Compute Jacobian
     Eigen::Vector3d reference_point_position(0.0, 0.0, 0.0);

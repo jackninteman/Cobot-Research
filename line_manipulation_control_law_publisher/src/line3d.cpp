@@ -38,15 +38,12 @@ Eigen::Vector3d Line3d::GetDesiredCrosstrackLocation(Eigen::Vector3d current_car
         std::cout << p << std::endl;
         ecl::Array<double> X = ecl::CubicPolynomial::Roots(p);
         std::cout << X << std::endl;
-        std::cout << "Original size: " << X.size() << std::endl;
 
         //Sometimes it produces NaN solution so we need to get rid of it
         while (std::isnan(X.back()))
         {
             X.resize(X.size()-1);
-            std::cout << "Now size: " << X.size() << std::endl;
         }
-        std::cout << "new X: " << X << std::endl;
         double t = this->GetOptimalLineParam(X, current_cartesian_position);
         Eigen::Vector3d optimal_point_in_line(
                             _x_param[0]*std::pow(t,2) + _x_param[1]*t + _x_param[2],
