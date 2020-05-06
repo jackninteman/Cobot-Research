@@ -1,0 +1,15 @@
+joint1_position:
+  type: effort_controllers/JointEffortController
+  joint: joint1
+
+joint2_position:
+  type: effort_controllers/JointEffortController
+  joint: joint2
+  
+joint3_position:
+  type: effort_controllers/JointEffortController
+  joint: joint3
+
+joint4_position:
+  type: effort_controllers/JointEffortController
+  joint: joint4

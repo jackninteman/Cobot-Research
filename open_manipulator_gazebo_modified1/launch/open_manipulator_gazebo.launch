@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="debug" default="false" />
+  <!-- Load the URDF into the ROS Parameter Server -->
+  <include file="$(find open_manipulator_description_modified)/launch/open_manipulator_upload.launch"/>
+  <!-- Run a python script to the send a service call to gazebo_ros to spawn a URDF robot -->
+  <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen" args="-urdf -model open_manipulator -z 0.0 -param robot_description"/>
+  <!-- Run a python script to send tf for fixed joint to rviz-->
+  <!--node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen"/-->
+  <!-- Run controller utils -->
+  <include file="$(find open_manipulator_gazebo_modified)/launch/controller_utils.launch"/>
+  <!-- ros_control robotis manipulator launch file -->
+  <include file="$(find open_manipulator_gazebo_modified)/launch/open_manipulator_controller.launch"/>
+  
+  <!-- Load the URDF, SRDF and other .yaml configuration files on the param server -->
+  <include file="$(find open_manipulator_moveit_config)/launch/planning_context.launch">
+    <arg name="load_robot_description" value="false"/>
+  </include>
+  <!-- We do not have a robot connected, so publish fake joint states -->
+  <rosparam param="source_list">[/joint_states]</rosparam>
+  <!--node name="line_manipulation_control_law_publisher_node" pkg="line_manipulation_control_law_publisher" type="line_manipulation_control_law_publisher_node" respawn="false" output="screen"/-->
+
+  <!-- Given the published joint states, publish tf for the robot links -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="true" output="screen" />
+</launch>
+
