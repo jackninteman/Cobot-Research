@@ -18,7 +18,8 @@ std::vector<std::string>* joint_names_ptr;
 
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 { 
-    //Setup for using FW kinematics and Jacobian
+    // Setup for using FW kinematics and Jacobian
+    // This function is run every time we receive current joint states
     std::vector<double> joint_values;
     kinematic_state->copyJointGroupPositions(joint_model_group,joint_values);
     joint_values[0] = jointStatesPtr_->position[2];
@@ -95,33 +96,67 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     joint4_torque_pub_.publish(msg);
 
 }
+
 int main(int argc, char **argv)
 {
+    // Init this ros node
     ros::init(argc, argv, "line_manipulation_control_law_publisher");
+    
+    // Setup ros node handle as unique pointer pointed to heap section
+    // This node handle will be there as long as the main function keeps spinning
     std::unique_ptr<ros::NodeHandle> ros_node(new ros::NodeHandle);
 
-    //Setup publisher to joint position action server
+    // Setup publisher to joint position action server
+    // The real publishing happens in the call back function above
+    // Note that this publisher is declared globally above so that we can use these variables in the 
+    // callback function
     joint1_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint1_position/command",1);
     joint2_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint2_position/command",1);
     joint3_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint3_position/command",1);
     joint4_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint4_position/command",1);
     
-    //Setup subscriber to joint state controller
+    // Setup subscriber to joint state controller
+    // Whenever we receive actual joint states, we will use callback function above to publish desired joint states
     ros::SubscribeOptions jointStateSubOption = ros::SubscribeOptions::create<sensor_msgs::JointState>(
         "/joint_states", 1, ControlLawPublisher, ros::VoidPtr(), ros_node->getCallbackQueue());
     ros::Subscriber jointStateSubscriber = ros_node->subscribe(jointStateSubOption);
 
-    //Setup robot kinematics to calculate jacobian in the callback function
+    // Setup robot kinematics to calculate jacobian in the callback function
+
+    // Load robot model from rosparam robot_description
     robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
+
+    // Get kinematic model pointer
     robot_model::RobotModelPtr kinematic_model = robot_model_loader.getModel();
+
+    // Get kinematic state pointer pointed to heap
+    // We declare kinematic_state as a global variable so that we can use kinematic_state in the callback function above
+    // Note that we cannot do this
+    // robot_state::RobotStatePtr kinematic_state(new robot_state::RobotState(kinematic_model));
+    // because we declare kinematic_state as a global variable above
+    // This is just a workaround to create a temp kinematic state and then move it to kinematic_state
+    // [To Do] Maybe there is a better way to do this without using temp variable
     robot_state::RobotStatePtr kinematic_state_temp(new robot_state::RobotState(kinematic_model));
     kinematic_state = std::move(kinematic_state_temp);
+
+    // Set kinematic_state to default value
+    // Acutally this step is not required but a good practice so that kinematics is not at unknown states
     kinematic_state->setToDefaultValues();
+
+    // Get joint model group named "arm"
+    // This name is set up in SRDF by moveit!
+    // Note that joint_model_group is a global variable
     joint_model_group = kinematic_model->getJointModelGroup("arm");
+    
+    // Get joint_names vector from joint_model_group
     std::vector<std::string> joint_names = joint_model_group->getVariableNames();
     joint_names_ptr = &joint_names;
+
+    // Get 4x4 Homogeneous transformation called end_effector_state reference
+    // That means the value in the reference can change over time
     const Eigen::Affine3d& end_effector_state = kinematic_state->getGlobalLinkTransform("end_effector_link");
 
+    // Done with all the setup. Now wait in ros::spin until we get something from subscription
     ros::spin();
     return 0;
 }
