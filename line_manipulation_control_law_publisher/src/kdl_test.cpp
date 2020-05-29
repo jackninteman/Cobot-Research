@@ -49,6 +49,8 @@ int main(int argc, char **argv)
     std::cout << "gravity_[2]: " << gravity_[2] << std::endl;
 	G_.resize(4);
     q_.resize(4);
+    q_.data << 0,0,0,0;
+
 
     // inverse dynamics solver
 	id_solver_.reset(new KDL::ChainDynParam(kdl_chain_, gravity_));
@@ -57,4 +59,11 @@ int main(int argc, char **argv)
 	std::cout << id_solver_->JntToGravity(q_, G_) << std::endl;
     std::cout << "G_: " << G_.data << std::endl;
     
+    q_.data << 0,0.785,0,0;
+    std::cout << id_solver_->JntToGravity(q_, G_) << std::endl;
+    std::cout << "G_: " << G_.data << std::endl;
+
+    q_.data << 0,-0.785,0,0;
+    std::cout << id_solver_->JntToGravity(q_, G_) << std::endl;
+    std::cout << "G_: " << G_.data << std::endl;
 }
