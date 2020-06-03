@@ -20,6 +20,13 @@ ros::Publisher joint4_torque_pub_;
 robot_state::RobotStatePtr kinematic_state;
 robot_state::JointModelGroup* joint_model_group;
 std::vector<std::string>* joint_names_ptr;
+KDL::ChainDynParam* id_solver_raw_;
+KDL::JntArray G_;
+KDL::JntArray C_;
+KDL::JntSpaceInertiaMatrix H_;
+KDL::JntArray q_;
+KDL::JntArray q_dot_;
+KDL::Vector gravity_;
 
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 { 
@@ -37,6 +44,15 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     joint_vel[1] = jointStatesPtr_->velocity[3];
     joint_vel[2] = jointStatesPtr_->velocity[4];
     joint_vel[3] = jointStatesPtr_->velocity[5];
+
+    q_.data = Eigen::Map<Eigen::Vector4d>(joint_values.data());
+    q_dot_.data = joint_vel;
+    
+    
+
+    id_solver_raw_->JntToGravity(q_, G_);
+    id_solver_raw_ ->JntToCoriolis(q_,q_dot_,C_);
+    id_solver_raw_->JntToMass(q_,H_);
 
     //Compute FW position kinematics
     const Eigen::Affine3d& end_effector_state = kinematic_state->getGlobalLinkTransform("end_effector_link");
@@ -85,9 +101,12 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     cartesian_damping.topLeftCorner(3,3) << 8.94*Eigen::Matrix3d::Identity();
     cartesian_damping.bottomRightCorner(3,3) << 0.1*Eigen::Matrix3d::Identity();
     
+    // KDL stuff
+
+
+
     //Compute Control Law
-    Eigen::Matrix<double,4,1> tau_d = jacobian.transpose()*
-      (cartesian_stiffness*error + cartesian_damping*(-jacobian*joint_vel));
+    Eigen::Matrix<double,4,1> tau_d = jacobian.transpose()*(cartesian_stiffness*error + cartesian_damping*(-jacobian*joint_vel)) + G_.data + C_.data;
     
     //Publish Control Law to each joint
     std_msgs::Float64 msg;
@@ -165,12 +184,7 @@ int main(int argc, char **argv)
     KDL::Tree 	kdl_tree_;
 	KDL::Chain	kdl_chain_;
     std::unique_ptr<KDL::ChainDynParam> id_solver_;
-    KDL::JntArray G_;
-    KDL::JntArray C_;
-    KDL::JntSpaceInertiaMatrix H_;
-    KDL::JntArray q_;
-    KDL::JntArray q_dot_;
-	KDL::Vector gravity_;
+    
     
 
     std::string robot_desc_string;
@@ -200,22 +214,25 @@ int main(int argc, char **argv)
     C_.resize(4);
     q_.resize(4);
     q_dot_.resize(4);
-    q_.data << 0,0,0,0;
-    q_dot_.data << 0.01,0.01,0.01,0.01;
+    //q_.data << 0,0,0,0;
+    //q_dot_.data << 0.01,0.01,0.01,0.01;
     
     // inverse dynamics solver
 	id_solver_.reset(new KDL::ChainDynParam(kdl_chain_, gravity_));
+    id_solver_raw_ = id_solver_.get();
 
     // compute gravity torque
-	std::cout << id_solver_->JntToGravity(q_, G_) << std::endl;
+    /*
+	std::cout << id_solver_raw_->JntToGravity(q_, G_) << std::endl;
     std::cout << "G_: " << G_.data << std::endl;
 
-    std::cout << id_solver_ ->JntToCoriolis(q_,q_dot_,C_);
+    std::cout << id_solver_raw_ ->JntToCoriolis(q_,q_dot_,C_);
     std::cout << "C_: " << C_.data << std::endl;
     
-    std::cout << id_solver_->JntToMass(q_,H_) << std::endl;
+    std::cout << id_solver_raw_->JntToMass(q_,H_) << std::endl;
     std::cout << "H_:" << H_.data << std::endl;
     std::cout << "test" << std::endl;
+    */
     // Done with all the setup. Now wait in ros::spin until we get something from subscription
     ros::spin();
     return 0;
