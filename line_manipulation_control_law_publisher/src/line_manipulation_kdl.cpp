@@ -10,6 +10,7 @@
 #include <kdl/kdl.hpp>
 #include <kdl/chain.hpp>
 #include <kdl/chaindynparam.hpp>
+#include <kdl/chainjnttojacsolver.hpp>
 #include <kdl_parser/kdl_parser.hpp>
 #include "line3d.h"
 
@@ -27,6 +28,8 @@ KDL::JntSpaceInertiaMatrix H_;
 KDL::JntArray q_;
 KDL::JntArray q_dot_;
 KDL::Vector gravity_;
+KDL::ChainJntToJacSolver* jac_solver_raw_;
+KDL::Jacobian J_;
 
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 { 
@@ -49,10 +52,12 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     q_dot_.data = joint_vel;
     
     
+    
 
     id_solver_raw_->JntToGravity(q_, G_);
     id_solver_raw_ ->JntToCoriolis(q_,q_dot_,C_);
     id_solver_raw_->JntToMass(q_,H_);
+    jac_solver_raw_->JntToJac(q_, J_);
 
     //Compute FW position kinematics
     const Eigen::Affine3d& end_effector_state = kinematic_state->getGlobalLinkTransform("end_effector_link");
@@ -106,8 +111,9 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
 
     //Compute Control Law
-    Eigen::Matrix<double,4,1> tau_d = jacobian.transpose()*(cartesian_stiffness*error + cartesian_damping*(-jacobian*joint_vel)) + G_.data + C_.data;
-    
+    //Eigen::Matrix<double,4,1> tau_d = jacobian.transpose()*(cartesian_stiffness*error + cartesian_damping*(-jacobian*joint_vel)) + G_.data + C_.data;
+    Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(cartesian_stiffness*error + cartesian_damping*(-jacobian*joint_vel)) + G_.data + C_.data;
+
     //Publish Control Law to each joint
     std_msgs::Float64 msg;
     msg.data = tau_d[0];
@@ -184,6 +190,7 @@ int main(int argc, char **argv)
     KDL::Tree 	kdl_tree_;
 	KDL::Chain	kdl_chain_;
     std::unique_ptr<KDL::ChainDynParam> id_solver_;
+    std::unique_ptr<KDL::ChainJntToJacSolver> jac_solver_;
     
     
 
@@ -212,6 +219,7 @@ int main(int argc, char **argv)
     G_.resize(4);
     H_.resize(4);
     C_.resize(4);
+    J_.resize(4);
     q_.resize(4);
     q_dot_.resize(4);
     //q_.data << 0,0,0,0;
@@ -219,7 +227,9 @@ int main(int argc, char **argv)
     
     // inverse dynamics solver
 	id_solver_.reset(new KDL::ChainDynParam(kdl_chain_, gravity_));
+    jac_solver_.reset(new KDL::ChainJntToJacSolver(kdl_chain_));
     id_solver_raw_ = id_solver_.get();
+    jac_solver_raw_ = jac_solver_.get();
 
     // compute gravity torque
     /*
