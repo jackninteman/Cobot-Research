@@ -1,0 +1,9 @@
+gripper_position1:
+  type: effort_controllers/JointPositionController
+  joint: panda_finger_joint1
+  pid: {p: 10.0, i: 0.0, d: 0.1}
+
+gripper_position2:
+  type: effort_controllers/JointPositionController
+  joint: panda_finger_joint2
+  pid: {p: 10.0, i: 0.0, d: 0.1}

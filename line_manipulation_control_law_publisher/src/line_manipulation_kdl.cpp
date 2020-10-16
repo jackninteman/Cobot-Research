@@ -1,11 +1,10 @@
-#include <ros/ros.h>
 #include <std_msgs/Float64.h>
 #include <sensor_msgs/JointState.h>
 #include <iostream>
 #include <memory>
-#include <moveit/robot_model_loader/robot_model_loader.h>
-#include <moveit/robot_model/robot_model.h>
-#include <moveit/robot_state/robot_state.h>
+//#include <moveit/robot_model_loader/robot_model_loader.h>
+//#include <moveit/robot_model/robot_model.h>
+//#include <moveit/robot_state/robot_state.h>
 #include <kdl/tree.hpp>
 #include <kdl/kdl.hpp>
 #include <kdl/chain.hpp>
@@ -13,13 +12,20 @@
 #include <kdl/chainjnttojacsolver.hpp>
 #include <kdl/chainfksolverpos_recursive.hpp>
 #include <kdl_parser/kdl_parser.hpp>
+#include <Eigen/Dense>
 #include "line3d.h"
+#include "pseudo_inversion.h"
+
+#include <ros/ros.h>
 
 // Global variable declaration
 ros::Publisher joint1_torque_pub_;
 ros::Publisher joint2_torque_pub_;
 ros::Publisher joint3_torque_pub_;
 ros::Publisher joint4_torque_pub_;
+ros::Publisher joint5_torque_pub_;
+ros::Publisher joint6_torque_pub_;
+ros::Publisher joint7_torque_pub_;
 KDL::ChainDynParam* dyn_solver_raw_;
 KDL::ChainJntToJacSolver* jac_solver_raw_;
 KDL::ChainFkSolverPos_recursive* fk_solver_raw_;
@@ -38,10 +44,16 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     q_.data[1] = jointStatesPtr_->position[3];
     q_.data[2] = jointStatesPtr_->position[4];
     q_.data[3] = jointStatesPtr_->position[5];
+    q_.data[4] = jointStatesPtr_->position[6];
+    q_.data[5] = jointStatesPtr_->position[7];
+    q_.data[6] = jointStatesPtr_->position[8];
     q_dot_.data[0] = jointStatesPtr_->velocity[2];
     q_dot_.data[1] = jointStatesPtr_->velocity[3];
     q_dot_.data[2] = jointStatesPtr_->velocity[4];
     q_dot_.data[3] = jointStatesPtr_->velocity[5];
+    q_dot_.data[4] = jointStatesPtr_->velocity[6];
+    q_dot_.data[5] = jointStatesPtr_->velocity[7];
+    q_dot_.data[6] = jointStatesPtr_->velocity[8];
 
     // Compute dynamics param, jacobian, and forward kinematics
     dyn_solver_raw_->JntToGravity(q_, G_);
@@ -50,6 +62,22 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     jac_solver_raw_->JntToJac(q_, J_);
     fk_solver_raw_->JntToCart(q_,ee_tf_);
 
+    // Compute mass matrix in cartesian space
+    Eigen::MatrixXd mass_joint_inverse;
+    Eigen::MatrixXd mass_cart;
+    pseudoInverse(H_.data, mass_joint_inverse,false);
+    //std::cout << "H_, H_inverse, H_*H_inverse, H_inverse*H_" << std::endl;
+    //std::cout << H_.data << std::endl << std::endl << mass_joint_inverse << std::endl << std::endl;
+    //std::cout << H_.data*mass_joint_inverse << std::endl << std::endl;
+    //std::cout << mass_joint_inverse*H_.data << std::endl << std::endl;
+    pseudoInverse(J_.data*mass_joint_inverse*J_.data.transpose(), mass_cart, false);
+    
+    // Compute Cholesky Decomposition
+    Eigen::LLT<Eigen::MatrixXd> lltofmass_cart(mass_cart);
+    Eigen::MatrixXd L = lltofmass_cart.matrixL();
+    Eigen::MatrixXd L_inverse;
+    pseudoInverse(L, L_inverse, false);
+
     // Put forward kinematics into proper forms
     Eigen::Vector3d ee_translation = Eigen::Map<Eigen::Vector3d>(ee_tf_.p.data);
     Eigen::Quaterniond ee_linear = Eigen::Map<Eigen::Quaterniond>(ee_tf_.M.data);
@@ -57,7 +85,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     // Setup line parameter
     std::vector<double> a = {0,1,0};
     std::vector<double> b = {0,0,0};
-    std::vector<double> c = {0,0,0.12};
+    std::vector<double> c = {0,0,0.6};
     //std::vector<double> a = {0,1,0};
     //std::vector<double> b = {0,1,0};
     //std::vector<double> c = {0,1,0};
@@ -73,6 +101,17 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double,6,1> error;
     error.head(3) << desired_position - current_position;
     
+    // Compute instantaneous frenet frame
+    Eigen::Vector3d e_t(1,0,0);
+    Eigen::Vector3d e_n(-error.head(3)/error.head(3).norm());
+    Eigen::Vector3d e_b(e_n.cross(e_t));
+    Eigen::Matrix<double,3,3> R3_3;
+    R3_3 << e_t, e_b, e_n;
+    Eigen::Matrix<double,6,6> R;
+    R.setIdentity();
+    R.topLeftCorner(3,3) << R3_3;
+    R.bottomRightCorner(3,3) << R3_3;
+
     // Compute orientation error
     if(desired_orientation.coeffs().dot(current_orientation.coeffs()) < 0.0)
     {
@@ -88,10 +127,19 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double,6,6> cartesian_damping;
     cartesian_stiffness.setIdentity();
     cartesian_damping.setIdentity();
-    cartesian_stiffness.topLeftCorner(3,3) << 20*Eigen::Matrix3d::Identity();
-    cartesian_stiffness.bottomRightCorner(3,3) << 2*Eigen::Matrix3d::Identity();
-    cartesian_damping.topLeftCorner(3,3) << 8.94*Eigen::Matrix3d::Identity();
-    cartesian_damping.bottomRightCorner(3,3) << 0.1*Eigen::Matrix3d::Identity();
+    cartesian_stiffness.topLeftCorner(3,3) << 500*Eigen::Matrix3d::Identity();
+    cartesian_stiffness.bottomRightCorner(3,3) << 30*Eigen::Matrix3d::Identity();
+    cartesian_damping.topLeftCorner(3,3) << 2*std::sqrt(500)*Eigen::Matrix3d::Identity();
+    cartesian_damping.bottomRightCorner(3,3) << 2*std::sqrt(30)*Eigen::Matrix3d::Identity();
+
+    // Specify adaptive damping
+    Eigen::Matrix<double,6,6> K_adp;
+    K_adp.setZero();
+    K_adp(2,2) = 500;
+
+    // Compute K_bar
+    Eigen::Matrix<double,6,6> K_bar(L_inverse*R*K_adp*R.transpose()*L_inverse.transpose());
+    std::cout << K_bar << std::endl << std::endl;
     
     //Compute Control Law
     Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(cartesian_stiffness*error + cartesian_damping*(-J_.data*q_dot_.data)) + G_.data + C_.data;
@@ -100,13 +148,18 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std_msgs::Float64 msg;
     msg.data = tau_d[0];
     joint1_torque_pub_.publish(msg);
-     msg.data = tau_d[1];
+    msg.data = tau_d[1];
     joint2_torque_pub_.publish(msg);
     msg.data = tau_d[2];
     joint3_torque_pub_.publish(msg);
     msg.data = tau_d[3];
     joint4_torque_pub_.publish(msg);
-
+    msg.data = tau_d[4];
+    joint5_torque_pub_.publish(msg);
+    msg.data = tau_d[5];
+    joint6_torque_pub_.publish(msg);
+    msg.data = tau_d[6];
+    joint7_torque_pub_.publish(msg);
 }
 
 int main(int argc, char **argv)
@@ -122,10 +175,13 @@ int main(int argc, char **argv)
     // The real publishing happens in the call back function above
     // Note that this publisher is declared globally above so that we can use these variables in the 
     // callback function
-    joint1_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint1_position/command",1);
-    joint2_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint2_position/command",1);
-    joint3_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint3_position/command",1);
-    joint4_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint4_position/command",1);
+    joint1_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint1_effort/command",1);
+    joint2_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint2_effort/command",1);
+    joint3_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint3_effort/command",1);
+    joint4_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint4_effort/command",1);
+    joint5_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint5_effort/command",1);
+    joint6_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint6_effort/command",1);
+    joint7_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint7_effort/command",1);
     
     // Setup subscriber to joint state controller
     // Whenever we receive actual joint states, we will use callback function above to publish desired joint states
@@ -153,7 +209,7 @@ int main(int argc, char **argv)
     
     // Get kdl chain
     std::string root_name = "world";
-	std::string tip_name = "end_effector_link";
+	std::string tip_name = "panda_link7";
 	  if(!kdl_tree_.getChain(root_name, tip_name, kdl_chain_))
       {
           ROS_ERROR("Failed to construct kdl chain");
@@ -163,7 +219,7 @@ int main(int argc, char **argv)
     // This is a gravity 3D vector. Value is [0,0,-9.81]^T 
     KDL::Vector gravity_;
     gravity_ = KDL::Vector::Zero();
-	gravity_(2) = -9.81;
+	gravity_(2) = -9.80;
     
     // Reset size of different matrices
     G_.resize(kdl_chain_.getNrOfJoints());

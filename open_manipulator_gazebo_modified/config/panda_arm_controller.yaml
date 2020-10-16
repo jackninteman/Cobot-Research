@@ -1,0 +1,27 @@
+joint1_effort:
+  type: effort_controllers/JointEffortController
+  joint: panda_joint1
+
+joint2_effort:
+  type: effort_controllers/JointEffortController
+  joint: panda_joint2
+  
+joint3_effort:
+  type: effort_controllers/JointEffortController
+  joint: panda_joint3
+
+joint4_effort:
+  type: effort_controllers/JointEffortController
+  joint: panda_joint4
+
+joint5_effort:
+  type: effort_controllers/JointEffortController
+  joint: panda_joint5
+
+joint6_effort:
+  type: effort_controllers/JointEffortController
+  joint: panda_joint6
+
+joint7_effort:
+  type: effort_controllers/JointEffortController
+  joint: panda_joint7
