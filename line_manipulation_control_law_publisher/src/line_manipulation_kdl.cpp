@@ -133,17 +133,30 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     cartesian_damping.bottomRightCorner(3,3) << 2*std::sqrt(30)*Eigen::Matrix3d::Identity();
 
     // Specify adaptive damping
-    Eigen::Matrix<double,6,6> K_adp;
-    K_adp.setZero();
-    K_adp(2,2) = 500;
+    Eigen::Matrix<double,6,6> K_des;
+    K_des.setZero();
+    K_des(2,2) = 200;
 
     // Compute K_bar
-    Eigen::Matrix<double,6,6> K_bar(L_inverse*R*K_adp*R.transpose()*L_inverse.transpose());
-    std::cout << K_bar << std::endl << std::endl;
+    Eigen::Matrix<double,6,6> K_bar(L_inverse*R*K_des*R.transpose()*L_inverse.transpose());
+
+    // Compute eigenvalue and eigenvector
+    Eigen::EigenSolver<Eigen::MatrixXd> es(K_bar);
+    std::cout << "The eigenvalues:" << std::endl << es.eigenvalues().real() << std::endl;
+    std::cout << "The eigenvector:" << std::endl << es.eigenvectors().real() << std::endl;
+    Eigen::Matrix<double,6,6> S(es.eigenvectors().real());
+    Eigen::Matrix<double,6,6> EV(es.eigenvalues().real().array().abs().sqrt().matrix().asDiagonal()*2.0);
+    std::cout << "EV:" << std::endl << EV << std::endl;
+    std::cout << "S:" << std::endl << S << std::endl;
+
+    // Compute desired damping matrix
+    Eigen::Matrix<double,6,6> C_des(R.transpose()*L*S*EV*S.transpose()*L.transpose()*R);
+    std::cout << "C_des:" << std::endl << C_des << std::endl;
     
     //Compute Control Law
-    Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(cartesian_stiffness*error + cartesian_damping*(-J_.data*q_dot_.data)) + G_.data + C_.data;
-
+    //Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(cartesian_stiffness*error + cartesian_damping*(-J_.data*q_dot_.data)) + G_.data + C_.data;
+    Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(-J_.data*q_dot_.data)) + G_.data + C_.data;
+    
     //Publish Control Law to each joint
     std_msgs::Float64 msg;
     msg.data = tau_d[0];
