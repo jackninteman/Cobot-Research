@@ -138,6 +138,7 @@ add_executable(test_node src/test.cpp src/line3d.cpp)
 add_executable(test_jacobian_node src/test_jacobian_node.cpp)
 add_executable(test_line3d_node src/test_line3d_node.cpp src/line3d.cpp)
 add_executable(kdl_test_node src/kdl_test.cpp)
+add_executable(line_rviz_publisher_node src/line_rviz_publisher.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -156,6 +157,7 @@ target_link_libraries(test_jacobian_node ${catkin_LIBRARIES})
 target_link_libraries(test_line3d_node ${catkin_LIBRARIES})
 target_link_libraries(kdl_test_node ${catkin_LIBRARIES})
 target_link_libraries(test_node ${catkin_LIBRARIES})
+target_link_libraries(line_rviz_publisher_node ${catkin_LIBRARIES})
 #############
 ## Install ##
 #############

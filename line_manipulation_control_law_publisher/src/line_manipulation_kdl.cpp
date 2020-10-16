@@ -84,8 +84,8 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // Setup line parameter
     std::vector<double> a = {0,1,0};
-    std::vector<double> b = {0,0,0};
-    std::vector<double> c = {0,0,0.6};
+    std::vector<double> b = {0,1,0};
+    std::vector<double> c = {0,0,0.3};
     //std::vector<double> a = {0,1,0};
     //std::vector<double> b = {0,1,0};
     //std::vector<double> c = {0,1,0};
@@ -96,13 +96,14 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Vector3d current_position(ee_translation);
     Eigen::Quaterniond desired_orientation(1,0,0,0);
     Eigen::Quaterniond current_orientation(ee_linear);
+    //desired_position << 0.5, 0.5, 0.5;
     
     // Compute position error
     Eigen::Matrix<double,6,1> error;
     error.head(3) << desired_position - current_position;
     
     // Compute instantaneous frenet frame
-    Eigen::Vector3d e_t(1,0,0);
+    Eigen::Vector3d e_t(1/std::sqrt(2),1/std::sqrt(2),0);
     Eigen::Vector3d e_n(-error.head(3)/error.head(3).norm());
     Eigen::Vector3d e_b(e_n.cross(e_t));
     Eigen::Matrix<double,3,3> R3_3;
@@ -135,22 +136,26 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     // Specify adaptive damping
     Eigen::Matrix<double,6,6> K_des;
     K_des.setZero();
-    K_des(2,2) = 200;
+    K_des(0,0) = 0;
+    K_des(1,1) = 0;
+    K_des(2,2) = 800;
 
     // Compute K_bar
     Eigen::Matrix<double,6,6> K_bar(L_inverse*R*K_des*R.transpose()*L_inverse.transpose());
-
+    
     // Compute eigenvalue and eigenvector
     Eigen::EigenSolver<Eigen::MatrixXd> es(K_bar);
     std::cout << "The eigenvalues:" << std::endl << es.eigenvalues().real() << std::endl;
     std::cout << "The eigenvector:" << std::endl << es.eigenvectors().real() << std::endl;
     Eigen::Matrix<double,6,6> S(es.eigenvectors().real());
-    Eigen::Matrix<double,6,6> EV(es.eigenvalues().real().array().abs().sqrt().matrix().asDiagonal()*2.0);
+    Eigen::Matrix<double,6,6> EV(es.eigenvalues().real().array().abs().sqrt().matrix().asDiagonal()*2.0*1.0);
     std::cout << "EV:" << std::endl << EV << std::endl;
     std::cout << "S:" << std::endl << S << std::endl;
 
     // Compute desired damping matrix
     Eigen::Matrix<double,6,6> C_des(R.transpose()*L*S*EV*S.transpose()*L.transpose()*R);
+    C_des(0,0) = 0;
+    C_des(1,1) = 0;
     std::cout << "C_des:" << std::endl << C_des << std::endl;
     
     //Compute Control Law

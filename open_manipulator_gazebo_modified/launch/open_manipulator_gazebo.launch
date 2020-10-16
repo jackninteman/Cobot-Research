@@ -1,6 +1,10 @@
 <?xml version="1.0"?>
 <launch>
   <arg name="debug" default="false" />
+  
+  <!--Load Gazebo empty world-->
+  <include file="$(find open_manipulator_gazebo_modified)/launch/gazebo_launch.launch"/>
+  
   <!-- Load the URDF into the ROS Parameter Server -->
   <!--include file="$(find open_manipulator_description_modified)/launch/open_manipulator_upload.launch"/-->
   <include file="$(find franka_description_gazebo)/launch/franka_upload.launch"/>
