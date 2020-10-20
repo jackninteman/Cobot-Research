@@ -137,26 +137,81 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double,6,6> K_des;
     K_des.setZero();
     K_des(0,0) = 0;
-    K_des(1,1) = 0;
+    K_des(1,1) = 800;
     K_des(2,2) = 800;
 
     // Compute K_bar
     Eigen::Matrix<double,6,6> K_bar(L_inverse*R*K_des*R.transpose()*L_inverse.transpose());
-    
+    std::cout << "K_bar: " << std::endl << K_bar << std::endl;
+
     // Compute eigenvalue and eigenvector
     Eigen::EigenSolver<Eigen::MatrixXd> es(K_bar);
-    std::cout << "The eigenvalues:" << std::endl << es.eigenvalues().real() << std::endl;
-    std::cout << "The eigenvector:" << std::endl << es.eigenvectors().real() << std::endl;
+    std::cout << "The eigenvalues:" << std::endl << es.eigenvalues() << std::endl;
+    std::cout << "The eigenvector:" << std::endl << es.eigenvectors() << std::endl;
     Eigen::Matrix<double,6,6> S(es.eigenvectors().real());
     Eigen::Matrix<double,6,6> EV(es.eigenvalues().real().array().abs().sqrt().matrix().asDiagonal()*2.0*1.0);
     std::cout << "EV:" << std::endl << EV << std::endl;
     std::cout << "S:" << std::endl << S << std::endl;
 
+    // Select only non zero eigenvales and eigenvectors
+    Eigen::Matrix<double,6,6> EV_new;
+    EV_new.setZero();
+    Eigen::Matrix<double,6,6> S_new;
+    S_new.setZero();
+    int k=0;
+    for (int i = 0; i < es.eigenvalues().real().size(); ++i)
+    {
+        if (es.eigenvalues().real()(i) > 0.001){
+            EV_new(k,k) = std::sqrt(es.eigenvalues().real()(i))*2.0*1.0;
+            S_new.col(k) = es.eigenvectors().real().col(i);
+            ++k;
+        } 
+    }
+
+    // Compute null space matrix
+    Eigen::FullPivLU<Eigen::MatrixXd> lu(K_bar);
+    Eigen::MatrixXd null_space = lu.kernel();
+    std::cout << "null_space: " << std::endl << null_space << std::endl;
+
+    // Compute orthogonal null space matrix
+    Eigen::HouseholderQR<Eigen::MatrixXd> qr(null_space);
+    Eigen::MatrixXd null_space_orthogonal(qr.householderQ());
+    std::cout << "null_space_orthogonal: " << std::endl << null_space_orthogonal << std::endl;
+    
+    for (int i = 0; i < null_space_orthogonal.cols(); ++i){
+        S_new.col(k) = null_space_orthogonal.col(i);
+        ++k;
+        if (k > 6) break;
+    }
+    std::cout << "EV_new:" << std::endl << EV_new << std::endl;
+    std::cout << "S_new:" << std::endl << S_new << std::endl;
+    std::cout << "Testing S_new orthogonality:" << std::endl;
+    std::cout << S_new.col(0).dot(S_new.col(1)) << std::endl;
+    std::cout << S_new.col(0).dot(S_new.col(2)) << std::endl;
+    std::cout << S_new.col(0).dot(S_new.col(3)) << std::endl;
+    std::cout << S_new.col(0).dot(S_new.col(4)) << std::endl;
+    std::cout << S_new.col(0).dot(S_new.col(5)) << std::endl;
+    std::cout << S_new.col(1).dot(S_new.col(2)) << std::endl;
+    std::cout << S_new.col(1).dot(S_new.col(3)) << std::endl;
+    std::cout << S_new.col(1).dot(S_new.col(4)) << std::endl;
+    std::cout << S_new.col(1).dot(S_new.col(5)) << std::endl;
+    std::cout << S_new.col(2).dot(S_new.col(3)) << std::endl;
+    std::cout << S_new.col(2).dot(S_new.col(4)) << std::endl;
+    std::cout << S_new.col(2).dot(S_new.col(5)) << std::endl;
+    std::cout << S_new.col(3).dot(S_new.col(4)) << std::endl;
+    std::cout << S_new.col(3).dot(S_new.col(5)) << std::endl;
+    std::cout << S_new.col(4).dot(S_new.col(5)) << std::endl;
+
+
     // Compute desired damping matrix
     Eigen::Matrix<double,6,6> C_des(R.transpose()*L*S*EV*S.transpose()*L.transpose()*R);
-    C_des(0,0) = 0;
-    C_des(1,1) = 0;
+    //C_des(0,0) = 0;
+    //C_des(1,1) = 0;
     std::cout << "C_des:" << std::endl << C_des << std::endl;
+    Eigen::Matrix<double,6,6> C_des_new(R.transpose()*L*S_new*EV_new*S_new.transpose()*L.transpose()*R);
+    //C_des(0,0) = 0;
+    //C_des(1,1) = 0;
+    std::cout << "C_des_new:" << std::endl << C_des_new << std::endl;
     
     //Compute Control Law
     //Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(cartesian_stiffness*error + cartesian_damping*(-J_.data*q_dot_.data)) + G_.data + C_.data;
