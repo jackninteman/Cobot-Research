@@ -1,5 +1,6 @@
 #include <std_msgs/Float64.h>
 #include <sensor_msgs/JointState.h>
+#include <geometry_msgs/Pose.h>
 #include <iostream>
 #include <memory>
 //#include <moveit/robot_model_loader/robot_model_loader.h>
@@ -16,6 +17,7 @@
 #include "line3d.h"
 #include "pseudo_inversion.h"
 
+
 #include <ros/ros.h>
 
 // Global variable declaration
@@ -26,6 +28,7 @@ ros::Publisher joint4_torque_pub_;
 ros::Publisher joint5_torque_pub_;
 ros::Publisher joint6_torque_pub_;
 ros::Publisher joint7_torque_pub_;
+ros::Publisher pose_pub_;
 KDL::ChainDynParam* dyn_solver_raw_;
 KDL::ChainJntToJacSolver* jac_solver_raw_;
 KDL::ChainFkSolverPos_recursive* fk_solver_raw_;
@@ -149,7 +152,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::cout << "The eigenvalues:" << std::endl << es.eigenvalues() << std::endl;
     std::cout << "The eigenvector:" << std::endl << es.eigenvectors() << std::endl;
     Eigen::Matrix<double,6,6> S(es.eigenvectors().real());
-    Eigen::Matrix<double,6,6> EV(es.eigenvalues().real().array().abs().sqrt().matrix().asDiagonal()*2.0*1.0);
+    Eigen::Matrix<double,6,6> EV(es.eigenvalues().real().array().abs().sqrt().matrix().asDiagonal()*2.0*1.00);
     std::cout << "EV:" << std::endl << EV << std::endl;
     std::cout << "S:" << std::endl << S << std::endl;
 
@@ -162,7 +165,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     for (int i = 0; i < es.eigenvalues().real().size(); ++i)
     {
         if (es.eigenvalues().real()(i) > 0.001){
-            EV_new(k,k) = std::sqrt(es.eigenvalues().real()(i))*2.0*1.0;
+            EV_new(k,k) = std::sqrt(es.eigenvalues().real()(i))*2.0*1.00;
             S_new.col(k) = es.eigenvectors().real().col(i);
             ++k;
         } 
@@ -212,10 +215,15 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     //C_des(0,0) = 0;
     //C_des(1,1) = 0;
     std::cout << "C_des_new:" << std::endl << C_des_new << std::endl;
+    std::cout << "mass_cart:" << std::endl << mass_cart << std::endl;
+    //std::cout << "ST_Kbar_S:" << std::endl << S.transpose()*K_bar*S << std::endl;
+    //std::cout << "ST_Kbar_S_new:" << std::endl << S_new.transpose()*K_bar*S_new << std::endl;
+    //std::cout << "ST_Cbar_S:" << std::endl << S.transpose()*L_inverse*R*C_des*R.transpose()*L_inverse.transpose()*S << std::endl;
+    //std::cout << "ST_Cbar_S_new:" << std::endl << S_new.transpose()*L_inverse*R*C_des_new*R.transpose()*L_inverse.transpose()*S_new << std::endl;
     
     //Compute Control Law
     //Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(cartesian_stiffness*error + cartesian_damping*(-J_.data*q_dot_.data)) + G_.data + C_.data;
-    Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(-J_.data*q_dot_.data)) + G_.data + C_.data;
+    Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des_new*R.transpose()*(-J_.data*q_dot_.data)) + G_.data + C_.data;
     
     //Publish Control Law to each joint
     std_msgs::Float64 msg;
@@ -233,6 +241,18 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     joint6_torque_pub_.publish(msg);
     msg.data = tau_d[6];
     joint7_torque_pub_.publish(msg);
+
+    //Publish Pose
+    geometry_msgs::Pose pose;
+    pose.position.x = current_position[0];
+    pose.position.y = current_position[1];
+    pose.position.z = current_position[2];
+    pose.orientation.x = current_orientation.x();
+    pose.orientation.y = current_orientation.y();
+    pose.orientation.z = current_orientation.z();
+    pose.orientation.w = current_orientation.w();
+    pose_pub_.publish(pose);
+
 }
 
 int main(int argc, char **argv)
@@ -255,6 +275,8 @@ int main(int argc, char **argv)
     joint5_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint5_effort/command",1);
     joint6_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint6_effort/command",1);
     joint7_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint7_effort/command",1);
+
+    pose_pub_ = ros_node->advertise<geometry_msgs::Pose>("/pose",1);
     
     // Setup subscriber to joint state controller
     // Whenever we receive actual joint states, we will use callback function above to publish desired joint states
