@@ -332,7 +332,7 @@ int main(int argc, char **argv)
     
     // Get kdl chain
     std::string root_name = "panda_link0";
-	std::string tip_name = "panda_rightfinger";
+	std::string tip_name = "end_effector_link";
 	  if(!kdl_tree_.getChain(root_name, tip_name, kdl_chain_))
       {
           ROS_ERROR("Failed to construct kdl chain");

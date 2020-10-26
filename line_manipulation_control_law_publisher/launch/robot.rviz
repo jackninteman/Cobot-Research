@@ -6,7 +6,9 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /RobotModel1/Links1
+        - /RobotModel1
+        - /TF1
+        - /TF1/Frames1
       Splitter Ratio: 0.5
     Tree Height: 462
   - Class: rviz/Selection
@@ -58,11 +60,16 @@ Visualization Manager:
       Collision Enabled: false
       Enabled: true
       Links:
-        All Links Enabled: false
+        All Links Enabled: true
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        end_effector_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         panda_hand:
           Alpha: 1
           Show Axes: false
@@ -107,12 +114,12 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: false
+          Value: true
         panda_link7:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: false
+          Value: true
         panda_link8:
           Alpha: 1
           Show Axes: false
@@ -121,7 +128,7 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: false
+          Value: true
         world:
           Alpha: 1
           Show Axes: false
@@ -145,6 +152,8 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
+        end_effector_link:
+          Value: true
         panda_hand:
           Value: false
         panda_leftfinger:
@@ -164,7 +173,7 @@ Visualization Manager:
         panda_link6:
           Value: false
         panda_link7:
-          Value: true
+          Value: false
         panda_link8:
           Value: false
         panda_rightfinger:
@@ -186,6 +195,8 @@ Visualization Manager:
                     panda_link5:
                       panda_link6:
                         panda_link7:
+                          end_effector_link:
+                            {}
                           panda_link8:
                             panda_hand:
                               panda_leftfinger:
@@ -222,25 +233,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.1454482078552246
+      Distance: 0.8798558115959167
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.8492878079414368
-        Y: 0.28417935967445374
-        Z: 0.61708003282547
+        X: 0.6823195219039917
+        Y: 0.5474201440811157
+        Z: 0.5345633625984192
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.2603980302810669
+      Pitch: 0.4097970128059387
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 0.3754013776779175
+      Yaw: 0.08540395647287369
     Saved: ~
 Window Geometry:
   Displays:
@@ -259,4 +270,4 @@ Window Geometry:
     collapsed: false
   Width: 1389
   X: 113
-  Y: 137
+  Y: 107

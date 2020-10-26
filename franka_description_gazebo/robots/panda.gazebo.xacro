@@ -15,6 +15,13 @@
                 <mu2>0.2</mu2>
             </gazebo>
         </xacro:macro>
+        <xacro:macro name="end_effector_gazebo" params="link">
+            <gazebo reference="${link}">
+                <material>Gazebo/Red</material>
+                <mu1>0.2</mu1>
+                <mu2>0.2</mu2>
+            </gazebo>
+        </xacro:macro>
         <xacro:arm_gazebo link="${arm_id}_link0"/>
         <xacro:arm_gazebo link="${arm_id}_link1"/>
         <xacro:arm_gazebo link="${arm_id}_link2"/>
@@ -27,5 +34,6 @@
         <xacro:hand_gazebo link="${arm_id}_hand"/>
         <xacro:hand_gazebo link="${arm_id}_rightfinger"/>
         <xacro:hand_gazebo link="${arm_id}_leftfinger"/>
+        <xacro:end_effector_gazebo link="end_effector_link"/>
     </xacro:macro>
 </robot>
