@@ -5,6 +5,7 @@
 #include <kdl_parser/kdl_parser.hpp>
 #include <iostream>
 #include <ros/ros.h>
+#include <Eigen/Dense>
 
 int main(int argc, char **argv)
 {
@@ -25,7 +26,6 @@ int main(int argc, char **argv)
 
     std::string robot_desc_string;
     ros_node->param("robot_description", robot_desc_string, std::string());
-
     
     // kdl parser
     if (!kdl_parser::treeFromString(robot_desc_string, kdl_tree_))

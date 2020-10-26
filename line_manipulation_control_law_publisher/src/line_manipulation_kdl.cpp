@@ -97,7 +97,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     // Desired and current ee position and orientation
     Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation));
     Eigen::Vector3d current_position(ee_translation);
-    Eigen::Quaterniond desired_orientation(1,0,0,0);
+    Eigen::Quaterniond desired_orientation(0,1,0,0);
     Eigen::Quaterniond current_orientation(ee_linear);
     //desired_position << 0.5, 0.5, 0.5;
     
@@ -114,7 +114,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double,6,6> R;
     R.setIdentity();
     R.topLeftCorner(3,3) << R3_3;
-    R.bottomRightCorner(3,3) << R3_3;
+    //R.bottomRightCorner(3,3) << R3_3;
 
     // Compute orientation error
     if(desired_orientation.coeffs().dot(current_orientation.coeffs()) < 0.0)
@@ -124,7 +124,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Quaterniond error_quaternion(current_orientation.inverse()*desired_orientation);
     error.tail(3) << error_quaternion.x(), error_quaternion.y(), error_quaternion.z();
     error.tail(3) << ee_linear*error.tail(3);
-    error.tail(3) << 0,0,0; //Don't care about orientation for now
+    //error.tail(3) << 0,0,0; //Don't care about orientation for now
 
     //Specify stiffness and damping
     Eigen::Matrix<double,6,6> cartesian_stiffness;
@@ -142,6 +142,24 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     K_des(0,0) = 0;
     K_des(1,1) = 800;
     K_des(2,2) = 800;
+    K_des(3,3) = 30;
+    K_des(4,4) = 30;
+    K_des(5,5) = 30;
+
+    // Compute pseudoinverse for Jacobian
+    Eigen::MatrixXd Jacobian_pseudoInverse_transpose;
+    pseudoInverse(J_.data.transpose(),Jacobian_pseudoInverse_transpose,false);
+
+    // Compute null space control law
+    /*Eigen::Matrix<double,7,1> null_error;
+    null_error.setZero();
+    null_error(2) = 0.0 - q_.data[2];
+    null_error(4) = 0.0 - q_.data[4];
+    Eigen::Matrix<double,7,1> tau_null;
+    Eigen::Matrix<double,7,7> identity_7by7;
+    identity_7by7.setIdentity();
+    tau_null = (identity_7by7 - J_.data.transpose()*Jacobian_pseudoInverse_transpose)*null_error*200;
+    */
 
     // Compute K_bar
     Eigen::Matrix<double,6,6> K_bar(L_inverse*R*K_des*R.transpose()*L_inverse.transpose());
@@ -223,8 +241,19 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     
     //Compute Control Law
     //Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(cartesian_stiffness*error + cartesian_damping*(-J_.data*q_dot_.data)) + G_.data + C_.data;
-    Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des_new*R.transpose()*(-J_.data*q_dot_.data)) + G_.data + C_.data;
+    Eigen::Matrix<double,7,1> tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des_new*R.transpose()*(-J_.data*q_dot_.data)) + G_.data + C_.data;
     
+    // Compute total control law
+    //tau_d = tau_d + tau_null;
+    //tau_d = tau_d;
+
+    // Show R on screen
+    std::cout << "R:" << std::endl << R << std::endl << std::endl;
+    std::cout << current_orientation.w() << std::endl;
+    std::cout << current_orientation.x() << std::endl;
+    std::cout << current_orientation.y() << std::endl;
+    std::cout << current_orientation.z() << std::endl;
+
     //Publish Control Law to each joint
     std_msgs::Float64 msg;
     msg.data = tau_d[0];
@@ -252,7 +281,6 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     pose.orientation.z = current_orientation.z();
     pose.orientation.w = current_orientation.w();
     pose_pub_.publish(pose);
-
 }
 
 int main(int argc, char **argv)
@@ -303,8 +331,8 @@ int main(int argc, char **argv)
     }
     
     // Get kdl chain
-    std::string root_name = "world";
-	std::string tip_name = "panda_link7";
+    std::string root_name = "panda_link0";
+	std::string tip_name = "panda_rightfinger";
 	  if(!kdl_tree_.getChain(root_name, tip_name, kdl_chain_))
       {
           ROS_ERROR("Failed to construct kdl chain");
