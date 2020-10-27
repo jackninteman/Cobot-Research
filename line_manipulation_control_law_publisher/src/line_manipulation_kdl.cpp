@@ -32,16 +32,13 @@ ros::Publisher pose_pub_;
 KDL::ChainDynParam* dyn_solver_raw_;
 KDL::ChainJntToJacSolver* jac_solver_raw_;
 KDL::ChainFkSolverPos_recursive* fk_solver_raw_;
-KDL::ChainFkSolverPos_recursive* fk_solver_raw_2_;
 KDL::Jacobian J_;
 KDL::JntArray G_;
 KDL::JntArray C_;
 KDL::JntSpaceInertiaMatrix H_;
 KDL::JntArray q_;
-KDL::JntArray q_test_;
 KDL::JntArray q_dot_;
 KDL::Frame ee_tf_;
-KDL::Frame some_link_;
 
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 { 
@@ -53,7 +50,6 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     q_.data[4] = jointStatesPtr_->position[6];
     q_.data[5] = jointStatesPtr_->position[7];
     q_.data[6] = jointStatesPtr_->position[8];
-    q_test_.data[0] = jointStatesPtr_->position[2];
     
     q_dot_.data[0] = jointStatesPtr_->velocity[2];
     q_dot_.data[1] = jointStatesPtr_->velocity[3];
@@ -69,16 +65,11 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     dyn_solver_raw_->JntToMass(q_,H_);
     jac_solver_raw_->JntToJac(q_, J_);
     fk_solver_raw_->JntToCart(q_,ee_tf_);
-    fk_solver_raw_2_->JntToCart(q_test_,some_link_);
 
     // Compute mass matrix in cartesian space
     Eigen::MatrixXd mass_joint_inverse;
     Eigen::MatrixXd mass_cart;
     pseudoInverse(H_.data, mass_joint_inverse,false);
-    //std::cout << "H_, H_inverse, H_*H_inverse, H_inverse*H_" << std::endl;
-    //std::cout << H_.data << std::endl << std::endl << mass_joint_inverse << std::endl << std::endl;
-    //std::cout << H_.data*mass_joint_inverse << std::endl << std::endl;
-    //std::cout << mass_joint_inverse*H_.data << std::endl << std::endl;
     pseudoInverse(J_.data*mass_joint_inverse*J_.data.transpose(), mass_cart, false);
     
     // Compute Cholesky Decomposition
@@ -89,20 +80,14 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // Put forward kinematics into proper forms
     Eigen::Vector3d ee_translation = Eigen::Map<Eigen::Vector3d>(ee_tf_.p.data);
-    //Eigen::Quaterniond ee_linear = Eigen::Map<Eigen::Quaterniond>(ee_tf_.M.data);
     Eigen::Matrix3d rotation_matrix = Eigen::Map<Eigen::Matrix3d>(ee_tf_.M.data);
+    // Need to transpose below for proper rotation matrix definition
     Eigen::Quaterniond ee_linear(rotation_matrix.transpose());
-    //Eigen::Quaterniond ee_linear(*(ee_tf_.M.data+3),*(ee_tf_.M.data),*(ee_tf_.M.data+1),*(ee_tf_.M.data+2));
-    //Eigen::Matrix3d rotation_matrix = Eigen::Map<Eigen::Matrix3d>(some_link_.M.data);
-    //Eigen::Quaterniond link_linear2(rotation_matrix.transpose());
 
     // Setup line parameter
     std::vector<double> a = {0,1,0};
     std::vector<double> b = {0,1,0};
     std::vector<double> c = {0,0,0.3};
-    //std::vector<double> a = {0,1,0};
-    //std::vector<double> b = {0,1,0};
-    //std::vector<double> c = {0,1,0};
     Line3d line(a,b,c);
 
     // Desired and current ee position and orientation
@@ -110,7 +95,6 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Vector3d current_position(ee_translation);
     Eigen::Quaterniond desired_orientation(0.0, 1.0, 0.0, 0.0);
     Eigen::Quaterniond current_orientation(ee_linear);
-    //desired_position << 0.5, 0.5, 0.5;
     
     // Compute position error
     Eigen::Matrix<double,6,1> error;
@@ -265,27 +249,6 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::cout << current_orientation.y() << std::endl;
     std::cout << current_orientation.z() << std::endl;
 
-    /*std::cout << *(some_link_.M.data) << std::endl;
-    std::cout << *(some_link_.M.data+1) << std::endl;
-    std::cout << *(some_link_.M.data+2) << std::endl;
-    std::cout << *(some_link_.M.data+3) << std::endl;
-    std::cout << *(some_link_.M.data+4) << std::endl;
-    std::cout << *(some_link_.M.data+5) << std::endl;
-    std::cout << *(some_link_.M.data+6) << std::endl;
-    std::cout << *(some_link_.M.data+7) << std::endl;
-    std::cout << *(some_link_.M.data+8) << std::endl << std::endl;
-    std::cout << link_linear2.w() << std::endl;
-    std::cout << link_linear2.x() << std::endl;
-    std::cout << link_linear2.y() << std::endl;
-    std::cout << link_linear2.z() << std::endl;*/
-
-    //std::cout << current_orientation.norm() << std::endl;
-    //std::cout << current_orientation.toRotationMatrix() << std::endl;
-    /*std::cout << *ee_tf_.M.data << std::endl;
-    std::cout << *(ee_tf_.M.data + 1)  << std::endl;
-    std::cout << *(ee_tf_.M.data + 2) << std::endl;
-    std::cout << *(ee_tf_.M.data + 3) << std::endl;*/
-
     //Publish Control Law to each joint
     std_msgs::Float64 msg;
     msg.data = tau_d[0];
@@ -367,14 +330,7 @@ int main(int argc, char **argv)
     // Get kdl chain
     std::string root_name = "world";
 	std::string tip_name = "end_effector_link";
-    std::string link_name = "panda_link1";
 	  if(!kdl_tree_.getChain(root_name, tip_name, kdl_chain_))
-      {
-          ROS_ERROR("Failed to construct kdl chain");
-          return false;
-      }
-
-      if(!kdl_tree_.getChain(root_name, link_name, kdl_chain_2_))
       {
           ROS_ERROR("Failed to construct kdl chain");
           return false;
@@ -392,20 +348,15 @@ int main(int argc, char **argv)
     J_.resize(kdl_chain_.getNrOfJoints());
     q_.resize(kdl_chain_.getNrOfJoints());
     q_dot_.resize(kdl_chain_.getNrOfJoints());
-    q_test_.resize(kdl_chain_2_.getNrOfJoints());
-
-    std::cout << "Number of joint: "<<kdl_chain_2_.getNrOfJoints() << std::endl;
     
     // Inverse dynamics solver
 	dyn_solver_.reset(new KDL::ChainDynParam(kdl_chain_, gravity_));
     jac_solver_.reset(new KDL::ChainJntToJacSolver(kdl_chain_));
     fk_solver_.reset(new KDL::ChainFkSolverPos_recursive(kdl_chain_));
-    fk_solver_2_.reset(new KDL::ChainFkSolverPos_recursive(kdl_chain_2_));
 
     dyn_solver_raw_ = dyn_solver_.get();
     jac_solver_raw_ = jac_solver_.get();
     fk_solver_raw_ = fk_solver_.get();
-    fk_solver_raw_2_ = fk_solver_2_.get();
 
     // Done with all the setup. Now wait in ros::spin until we get something from subscription
     ros::spin();
