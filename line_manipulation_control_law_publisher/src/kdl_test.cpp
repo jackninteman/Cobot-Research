@@ -15,7 +15,7 @@ int main(int argc, char **argv)
     // Setup ros node handle as unique pointer pointed to heap section
     // This node handle will be there as long as the main function keeps spinning
     std::unique_ptr<ros::NodeHandle> ros_node(new ros::NodeHandle);
-
+    
     // Set up tree
     KDL::Tree 	kdl_tree_;
 	KDL::Chain	kdl_chain_;

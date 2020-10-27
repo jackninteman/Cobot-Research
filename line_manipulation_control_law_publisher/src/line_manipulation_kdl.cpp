@@ -83,7 +83,9 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // Put forward kinematics into proper forms
     Eigen::Vector3d ee_translation = Eigen::Map<Eigen::Vector3d>(ee_tf_.p.data);
-    Eigen::Quaterniond ee_linear = Eigen::Map<Eigen::Quaterniond>(ee_tf_.M.data);
+    //Eigen::Quaterniond ee_linear = Eigen::Map<Eigen::Quaterniond>(ee_tf_.M.data);
+    Eigen::Quaterniond ee_linear(ee_tf_.M.data);
+    //Eigen::Quaterniond ee_linear(*(ee_tf_.M.data+3),*(ee_tf_.M.data),*(ee_tf_.M.data+1),*(ee_tf_.M.data+2));
 
     // Setup line parameter
     std::vector<double> a = {0,1,0};
@@ -97,8 +99,8 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     // Desired and current ee position and orientation
     Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation));
     Eigen::Vector3d current_position(ee_translation);
-    Eigen::Quaterniond desired_orientation(0,1,0,0);
-    Eigen::Quaterniond current_orientation(ee_linear);
+    Eigen::Quaterniond desired_orientation(0.0,1.0,0.0,0.0);
+    Eigen::Quaterniond current_orientation(*(ee_tf_.M.data+3)/ee_linear.norm(),*(ee_tf_.M.data)/ee_linear.norm(),*(ee_tf_.M.data+1)/ee_linear.norm(),*(ee_tf_.M.data+2)/ee_linear.norm());;
     //desired_position << 0.5, 0.5, 0.5;
     
     // Compute position error
@@ -123,8 +125,8 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     }
     Eigen::Quaterniond error_quaternion(current_orientation.inverse()*desired_orientation);
     error.tail(3) << error_quaternion.x(), error_quaternion.y(), error_quaternion.z();
-    error.tail(3) << ee_linear*error.tail(3);
-    //error.tail(3) << 0,0,0; //Don't care about orientation for now
+    error.tail(3) << current_orientation*error.tail(3);
+    error.tail(3) << 0,0,0; //Don't care about orientation for now
 
     //Specify stiffness and damping
     Eigen::Matrix<double,6,6> cartesian_stiffness;
@@ -253,6 +255,12 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::cout << current_orientation.x() << std::endl;
     std::cout << current_orientation.y() << std::endl;
     std::cout << current_orientation.z() << std::endl;
+    std::cout << current_orientation.norm() << std::endl;
+    std::cout << current_orientation.toRotationMatrix() << std::endl;
+    /*std::cout << *ee_tf_.M.data << std::endl;
+    std::cout << *(ee_tf_.M.data + 1)  << std::endl;
+    std::cout << *(ee_tf_.M.data + 2) << std::endl;
+    std::cout << *(ee_tf_.M.data + 3) << std::endl;*/
 
     //Publish Control Law to each joint
     std_msgs::Float64 msg;
@@ -331,8 +339,8 @@ int main(int argc, char **argv)
     }
     
     // Get kdl chain
-    std::string root_name = "panda_link0";
-	std::string tip_name = "end_effector_link";
+    std::string root_name = "world";
+	std::string tip_name = "panda_link1";
 	  if(!kdl_tree_.getChain(root_name, tip_name, kdl_chain_))
       {
           ROS_ERROR("Failed to construct kdl chain");
@@ -351,6 +359,7 @@ int main(int argc, char **argv)
     J_.resize(kdl_chain_.getNrOfJoints());
     q_.resize(kdl_chain_.getNrOfJoints());
     q_dot_.resize(kdl_chain_.getNrOfJoints());
+    std::cout << "Number of joint: "<<kdl_chain_.getNrOfJoints() << std::endl;
     
     // Inverse dynamics solver
 	dyn_solver_.reset(new KDL::ChainDynParam(kdl_chain_, gravity_));
