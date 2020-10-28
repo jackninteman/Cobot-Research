@@ -53,6 +53,12 @@ Eigen::Vector3d Line3d::GetDesiredCrosstrackLocation(Eigen::Vector3d current_car
         }
 }
 
+Eigen::Vector3d Line3d::GetDesiredCrosstrackLocation(Eigen::Vector3d current_cartesian_position, double &distance_param)
+{
+    distance_param = ((_p_final - _p_initial).dot(current_cartesian_position - _p_initial))/(_p_final - _p_initial).norm();
+    return _p_initial + distance_param*this->GetLineUnitDirection();
+}
+
 double Line3d::GetOptimalLineParam(ecl::Array<double> X, Eigen::Vector3d current_cartesian_position)
 {
     std::vector<double> optimal_param_vec;

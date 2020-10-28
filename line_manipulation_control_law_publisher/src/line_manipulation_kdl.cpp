@@ -85,13 +85,17 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Quaterniond ee_linear(rotation_matrix.transpose());
 
     // Setup line parameter
-    std::vector<double> a = {0,1,0};
+    /*std::vector<double> a = {0,1,0};
     std::vector<double> b = {0,1,0};
     std::vector<double> c = {0,0,0.3};
-    Line3d line(a,b,c);
+    Line3d line(a,b,c);*/
+    Eigen::Vector3d p_initial(0.3,0.3,0.3);
+    Eigen::Vector3d p_final(0.4,0.4,0.4);
+    Line3d line(p_initial, p_final);
+    double distance_param;
 
     // Desired and current ee position and orientation
-    Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation));
+    Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation,distance_param));
     Eigen::Vector3d current_position(ee_translation);
     Eigen::Quaterniond desired_orientation(0.0, 1.0, 0.0, 0.0);
     Eigen::Quaterniond current_orientation(ee_linear);
@@ -101,7 +105,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     error.head(3) << desired_position - current_position;
     
     // Compute instantaneous frenet frame
-    Eigen::Vector3d e_t(1/std::sqrt(2),1/std::sqrt(2),0);
+    Eigen::Vector3d e_t(line.GetLineUnitDirection());
     Eigen::Vector3d e_n(-error.head(3)/error.head(3).norm());
     Eigen::Vector3d e_b(e_n.cross(e_t));
     Eigen::Matrix<double,3,3> R3_3;
@@ -109,7 +113,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double,6,6> R;
     R.setIdentity();
     R.topLeftCorner(3,3) << R3_3;
-    //R.bottomRightCorner(3,3) << R3_3;
+    R.bottomRightCorner(3,3) << R3_3;
 
     // Compute orientation error
     if(desired_orientation.coeffs().dot(current_orientation.coeffs()) < 0.0)
@@ -248,6 +252,8 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::cout << current_orientation.x() << std::endl;
     std::cout << current_orientation.y() << std::endl;
     std::cout << current_orientation.z() << std::endl;
+    std::cout << "Distance Parameter = " << distance_param << std::endl;
+    std::cout << line.GetLineUnitDirection() << std::endl;
 
     //Publish Control Law to each joint
     std_msgs::Float64 msg;
