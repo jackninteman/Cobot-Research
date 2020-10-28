@@ -1,6 +1,7 @@
 #include <std_msgs/Float64.h>
 #include <sensor_msgs/JointState.h>
 #include <geometry_msgs/Pose.h>
+#include <geometry_msgs/Point.h>
 #include <iostream>
 #include <memory>
 //#include <moveit/robot_model_loader/robot_model_loader.h>
@@ -39,6 +40,8 @@ KDL::JntSpaceInertiaMatrix H_;
 KDL::JntArray q_;
 KDL::JntArray q_dot_;
 KDL::Frame ee_tf_;
+Eigen::Vector3d p_initial(0.1,0.1,0.1);
+Eigen::Vector3d p_final(0.5,0.8,0.3);
 
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 { 
@@ -89,8 +92,6 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::vector<double> b = {0,1,0};
     std::vector<double> c = {0,0,0.3};
     Line3d line(a,b,c);*/
-    Eigen::Vector3d p_initial(0.3,0.3,0.3);
-    Eigen::Vector3d p_final(0.4,0.4,0.4);
     Line3d line(p_initial, p_final);
     double distance_param;
 
@@ -162,16 +163,16 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // Compute K_bar
     Eigen::Matrix<double,6,6> K_bar(L_inverse*R*K_des*R.transpose()*L_inverse.transpose());
-    std::cout << "K_bar: " << std::endl << K_bar << std::endl;
+    //std::cout << "K_bar: " << std::endl << K_bar << std::endl;
 
     // Compute eigenvalue and eigenvector
     Eigen::EigenSolver<Eigen::MatrixXd> es(K_bar);
-    std::cout << "The eigenvalues:" << std::endl << es.eigenvalues() << std::endl;
-    std::cout << "The eigenvector:" << std::endl << es.eigenvectors() << std::endl;
+    //std::cout << "The eigenvalues:" << std::endl << es.eigenvalues() << std::endl;
+    //std::cout << "The eigenvector:" << std::endl << es.eigenvectors() << std::endl;
     Eigen::Matrix<double,6,6> S(es.eigenvectors().real());
     Eigen::Matrix<double,6,6> EV(es.eigenvalues().real().array().abs().sqrt().matrix().asDiagonal()*2.0*1.00);
-    std::cout << "EV:" << std::endl << EV << std::endl;
-    std::cout << "S:" << std::endl << S << std::endl;
+    //std::cout << "EV:" << std::endl << EV << std::endl;
+    //std::cout << "S:" << std::endl << S << std::endl;
 
     // Select only non zero eigenvales and eigenvectors
     Eigen::Matrix<double,6,6> EV_new;
@@ -191,19 +192,19 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     // Compute null space matrix
     Eigen::FullPivLU<Eigen::MatrixXd> lu(K_bar);
     Eigen::MatrixXd null_space = lu.kernel();
-    std::cout << "null_space: " << std::endl << null_space << std::endl;
+    //std::cout << "null_space: " << std::endl << null_space << std::endl;
 
     // Compute orthogonal null space matrix
     Eigen::HouseholderQR<Eigen::MatrixXd> qr(null_space);
     Eigen::MatrixXd null_space_orthogonal(qr.householderQ());
-    std::cout << "null_space_orthogonal: " << std::endl << null_space_orthogonal << std::endl;
+    //std::cout << "null_space_orthogonal: " << std::endl << null_space_orthogonal << std::endl;
     
     for (int i = 0; i < null_space_orthogonal.cols(); ++i){
         S_new.col(k) = null_space_orthogonal.col(i);
         ++k;
         if (k > 6) break;
     }
-    std::cout << "EV_new:" << std::endl << EV_new << std::endl;
+    /*std::cout << "EV_new:" << std::endl << EV_new << std::endl;
     std::cout << "S_new:" << std::endl << S_new << std::endl;
     std::cout << "Testing S_new orthogonality:" << std::endl;
     std::cout << S_new.col(0).dot(S_new.col(1)) << std::endl;
@@ -221,18 +222,19 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::cout << S_new.col(3).dot(S_new.col(4)) << std::endl;
     std::cout << S_new.col(3).dot(S_new.col(5)) << std::endl;
     std::cout << S_new.col(4).dot(S_new.col(5)) << std::endl;
+    */
 
 
     // Compute desired damping matrix
     Eigen::Matrix<double,6,6> C_des(R.transpose()*L*S*EV*S.transpose()*L.transpose()*R);
     //C_des(0,0) = 0;
     //C_des(1,1) = 0;
-    std::cout << "C_des:" << std::endl << C_des << std::endl;
+    //std::cout << "C_des:" << std::endl << C_des << std::endl;
     Eigen::Matrix<double,6,6> C_des_new(R.transpose()*L*S_new*EV_new*S_new.transpose()*L.transpose()*R);
-    //C_des(0,0) = 0;
+    C_des_new(0,0) = 300.0;
     //C_des(1,1) = 0;
     std::cout << "C_des_new:" << std::endl << C_des_new << std::endl;
-    std::cout << "mass_cart:" << std::endl << mass_cart << std::endl;
+    //std::cout << "mass_cart:" << std::endl << mass_cart << std::endl;
     //std::cout << "ST_Kbar_S:" << std::endl << S.transpose()*K_bar*S << std::endl;
     //std::cout << "ST_Kbar_S_new:" << std::endl << S_new.transpose()*K_bar*S_new << std::endl;
     //std::cout << "ST_Cbar_S:" << std::endl << S.transpose()*L_inverse*R*C_des*R.transpose()*L_inverse.transpose()*S << std::endl;
@@ -247,13 +249,14 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     //tau_d = tau_d;
 
     // Show R on screen
-    std::cout << "R:" << std::endl << R << std::endl << std::endl;
+    /*std::cout << "R:" << std::endl << R << std::endl << std::endl;
     std::cout << current_orientation.w() << std::endl;
     std::cout << current_orientation.x() << std::endl;
     std::cout << current_orientation.y() << std::endl;
     std::cout << current_orientation.z() << std::endl;
     std::cout << "Distance Parameter = " << distance_param << std::endl;
     std::cout << line.GetLineUnitDirection() << std::endl;
+    */
 
     //Publish Control Law to each joint
     std_msgs::Float64 msg;
@@ -272,7 +275,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     msg.data = tau_d[6];
     joint7_torque_pub_.publish(msg);
 
-    //Publish Pose
+    // Publish Pose
     geometry_msgs::Pose pose;
     pose.position.x = current_position[0];
     pose.position.y = current_position[1];
@@ -306,6 +309,14 @@ int main(int argc, char **argv)
     joint7_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint7_effort/command",1);
 
     pose_pub_ = ros_node->advertise<geometry_msgs::Pose>("/pose",1);
+
+    // Set rosparameter
+    ros_node->setParam("/p_initial_x",p_initial[0]);
+    ros_node->setParam("/p_initial_y",p_initial[1]);
+    ros_node->setParam("/p_initial_z",p_initial[2]);
+    ros_node->setParam("/p_final_x",p_final[0]);
+    ros_node->setParam("/p_final_y",p_final[1]);
+    ros_node->setParam("/p_final_z",p_final[2]);
     
     // Setup subscriber to joint state controller
     // Whenever we receive actual joint states, we will use callback function above to publish desired joint states

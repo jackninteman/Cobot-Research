@@ -1,5 +1,6 @@
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
+#include <Eigen/Dense>
 
 #include <cmath>
 
@@ -50,8 +51,9 @@ int main( int argc, char** argv )
     points.color.g = 1.0f;
     points.color.a = 1.0;
 
-    // Line strip is blue
-    line_strip.color.b = 1.0;
+    // Line strip is yellow
+    line_strip.color.r = 1.0;
+    line_strip.color.g = 1.0;
     line_strip.color.a = 1.0;
 
     // Line list is red
@@ -59,17 +61,28 @@ int main( int argc, char** argv )
     line_list.color.a = 1.0;
 
 
-
+    Eigen::Vector3d p_initial;
+    Eigen::Vector3d p_final;
+    n.getParam("p_initial_x", p_initial[0]);
+    n.getParam("p_initial_y", p_initial[1]);
+    n.getParam("p_initial_z", p_initial[2]);
+    n.getParam("p_final_x", p_final[0]);
+    n.getParam("p_final_y", p_final[1]);
+    n.getParam("p_final_z", p_final[2]);
+    Eigen::Vector3d p_difference((p_final-p_initial)/(p_final-p_initial).norm());
+    int sample=20;
     // Create the vertices for the points and lines
-    for (int i = -10; i < 10; ++i)
+    for (int i = -5; i <= 5; ++i)
     {
       float y = 5 * sin(f + i / 100.0f * 2 * M_PI);
       float z = 5 * cos(f + i / 100.0f * 2 * M_PI);
 
+      
+
       geometry_msgs::Point p;
-      p.x = i;
-      p.y = i;
-      p.z = 0.3;
+      p.x = p_initial[0] + i*p_difference[0];
+      p.y = p_initial[1] + i*p_difference[1];
+      p.z = p_initial[2] + i*p_difference[2];
 
       points.points.push_back(p);
       line_strip.points.push_back(p);
