@@ -16,6 +16,7 @@
 #include <kdl_parser/kdl_parser.hpp>
 #include <Eigen/Dense>
 #include "line3d.h"
+#include "circle3d.h"
 #include "pseudo_inversion.h"
 
 
@@ -40,8 +41,9 @@ KDL::JntSpaceInertiaMatrix H_;
 KDL::JntArray q_;
 KDL::JntArray q_dot_;
 KDL::Frame ee_tf_;
-Eigen::Vector3d p_initial(0.1,0.1,0.1);
-Eigen::Vector3d p_final(0.5,0.8,0.3);
+Eigen::Vector3d p_initial(0.3536,0.3536,0.5);
+Eigen::Vector3d p_final(-0.3536,0.3536,0.5);
+Eigen::Vector3d p_center(0.0,0.0,0.5);
 
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 { 
@@ -92,11 +94,14 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::vector<double> b = {0,1,0};
     std::vector<double> c = {0,0,0.3};
     Line3d line(a,b,c);*/
-    Line3d line(p_initial, p_final);
-    double distance_param;
+    /*Line3d line(p_initial, p_final);
+    double distance_param;*/
+    Circle3d circle(p_initial, p_final, p_center);
+    double theta_param;
 
     // Desired and current ee position and orientation
-    Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation,distance_param));
+    //Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation,distance_param));
+    Eigen::Vector3d desired_position(circle.GetDesiredCrosstrackLocation(ee_translation,theta_param));
     Eigen::Vector3d current_position(ee_translation);
     Eigen::Quaterniond desired_orientation(0.0, 1.0, 0.0, 0.0);
     Eigen::Quaterniond current_orientation(ee_linear);
@@ -106,7 +111,8 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     error.head(3) << desired_position - current_position;
     
     // Compute instantaneous frenet frame
-    Eigen::Vector3d e_t(line.GetLineUnitDirection());
+    //Eigen::Vector3d e_t(line.GetLineUnitDirection());
+    Eigen::Vector3d e_t(circle.GetUnitDirection(theta_param));
     Eigen::Vector3d e_n(-error.head(3)/error.head(3).norm());
     Eigen::Vector3d e_b(e_n.cross(e_t));
     Eigen::Matrix<double,3,3> R3_3;
@@ -151,15 +157,15 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     pseudoInverse(J_.data.transpose(),Jacobian_pseudoInverse_transpose,false);
 
     // Compute null space control law
-    /*Eigen::Matrix<double,7,1> null_error;
+    Eigen::Matrix<double,7,1> null_error;
     null_error.setZero();
-    null_error(2) = 0.0 - q_.data[2];
-    null_error(4) = 0.0 - q_.data[4];
+    null_error(1) = 0.0 - q_.data[1];
+    null_error(3) = -1.57 - q_.data[3];
     Eigen::Matrix<double,7,1> tau_null;
     Eigen::Matrix<double,7,7> identity_7by7;
     identity_7by7.setIdentity();
-    tau_null = (identity_7by7 - J_.data.transpose()*Jacobian_pseudoInverse_transpose)*null_error*200;
-    */
+    tau_null = (identity_7by7 - J_.data.transpose()*Jacobian_pseudoInverse_transpose)*null_error*800.0;
+    
 
     // Compute K_bar
     Eigen::Matrix<double,6,6> K_bar(L_inverse*R*K_des*R.transpose()*L_inverse.transpose());
@@ -170,7 +176,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     //std::cout << "The eigenvalues:" << std::endl << es.eigenvalues() << std::endl;
     //std::cout << "The eigenvector:" << std::endl << es.eigenvectors() << std::endl;
     Eigen::Matrix<double,6,6> S(es.eigenvectors().real());
-    Eigen::Matrix<double,6,6> EV(es.eigenvalues().real().array().abs().sqrt().matrix().asDiagonal()*2.0*1.00);
+    Eigen::Matrix<double,6,6> EV(es.eigenvalues().real().array().abs().sqrt().matrix().asDiagonal()*2.0*1.0);
     //std::cout << "EV:" << std::endl << EV << std::endl;
     //std::cout << "S:" << std::endl << S << std::endl;
 
@@ -183,7 +189,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     for (int i = 0; i < es.eigenvalues().real().size(); ++i)
     {
         if (es.eigenvalues().real()(i) > 0.001){
-            EV_new(k,k) = std::sqrt(es.eigenvalues().real()(i))*2.0*1.00;
+            EV_new(k,k) = std::sqrt(es.eigenvalues().real()(i))*2.0*1.0;
             S_new.col(k) = es.eigenvectors().real().col(i);
             ++k;
         } 
@@ -231,7 +237,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     //C_des(1,1) = 0;
     //std::cout << "C_des:" << std::endl << C_des << std::endl;
     Eigen::Matrix<double,6,6> C_des_new(R.transpose()*L*S_new*EV_new*S_new.transpose()*L.transpose()*R);
-    C_des_new(0,0) = 300.0;
+    //C_des_new(0,0) = 300.0;
     //C_des(1,1) = 0;
     std::cout << "C_des_new:" << std::endl << C_des_new << std::endl;
     //std::cout << "mass_cart:" << std::endl << mass_cart << std::endl;
@@ -245,8 +251,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double,7,1> tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des_new*R.transpose()*(-J_.data*q_dot_.data)) + G_.data + C_.data;
     
     // Compute total control law
-    //tau_d = tau_d + tau_null;
-    //tau_d = tau_d;
+    tau_d = tau_d + tau_null;
 
     // Show R on screen
     /*std::cout << "R:" << std::endl << R << std::endl << std::endl;
