@@ -1,1 +1,102 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[parfill]{parskip}
+\usepackage{bm}
+\usepackage{xcolor}
 
+\title{A Unified Cobot-Inspired Path/Trajectory Control System for Industrial Manipulators}
+\author{Danop Rajabhandharaks and Christopher Kitts}
+\date{November 2020}
+
+\newcommand{\M}{\bm{M}}
+\newcommand{\q}{\bm{q}}
+\newcommand{\qdot}{\dot{\bm{q}}}
+\newcommand{\qdotdot}{\ddot{\bm{q}}}
+\newcommand{\C}{\bm{C}}
+\newcommand{\G}{\bm{G}}
+\newcommand{\tauBold}{\bm{\tau}}
+\newcommand{\F}{\bm{F}}
+\newcommand{\J}{\bm{J}}
+\newcommand{\Jdot}{\dot{\bm{J}}}
+\newcommand{\LambdaBold}{\bm{\Lambda}}
+\newcommand{\x}{\bm{x}}
+\newcommand{\xdot}{\dot{\bm{x}}}
+\newcommand{\xdotdot}{\ddot{\bm{x}}}
+\newcommand{\muBold}{\bm{\mu}}
+\newcommand{\Dd}{\bm{D}_d}
+\newcommand{\Kd}{\bm{K}_d}
+\newcommand{\I}{\bm{I}}
+\newcommand{\etaBold}{\bm{\eta}}
+
+\begin{document}
+
+\maketitle
+
+\section{Abstract}
+Cobots are robots designed to work “collaboratively” with humans by enabling close-proximity interaction and making the process of “programming” motion far more intuitive.  Originally conceived in the late 1990s, such robots allowed interactive human-robot activity with a “robot” that applied no motive forces – thereby ensuring safety - but which enforced motion boundaries or paths, thereby allowing a human worker to easily maneuver large complex objects in an assembly line environments. Today, the modern vision of cobots maintains operator safety through active control to sense and recoil from operator impacts, ensuring that any impact forces are low enough to prevent injury.  All of the major industrial arm manufacturers have entered the cobot market, and this market is forecasted to grow more than 56\%/yr and surpass \$4.25B over the next 5 years. Our current work in this area focuses on a unified control architecture that allows an operator to easily execute any of a number of cobot path-control behavior options for a specific pre-defined six degree of freedom path. For each, at any point along the prescribed path, the robot actively nulls cross-track error and enforces the end-effector orientation associated with that point. Motion along the path, however, can be implemented across a spectrum of manual-to-automated mobility, to include: a) fully manual mode in which the operator pulls the end-effector and payload along the path, b) augmented dynamics mode in which active control is used to compensate for system mass, inertia and friction such that the end-effector/payload is easily pulled along its path as if it were a low mass/inertia, lightly damped system, c) power-assist mode in which the robot senses operator interaction forces and moves the manipulator along its path at a low speed or by maintaining force control, and d) fully automated mode in which path motion is controlled based on desired timing, constituting the equivalence of standard trajectory control. This paper describes the control architecture, presents the control laws for each mode, and reviews experimental results that show control performance and demonstrate the different modes of operator interaction.
+
+% Introduction
+\section{Introduction}
+This is a test. I am testing writing here. I think I will love it. I just found autocompile function.
+Let's make some inline formula $e^{i\pi}$.
+Now let's do section of formula
+$$\frac{1}{n}$$
+
+\subsection{Problem Statement}
+\subsection{Related Work}
+
+% Co-manipulation Control Scheme
+\section{Co-manipulation Control Scheme}
+A dynamic model of a robot manipulator in the joint space with $n$ joints can be presented in a form of
+%
+% Joint Space EOM
+\begin{equation}
+    \M(\q)\qdotdot+\C(\q,\qdot)+\G(\q)=\tauBold_c+\J^T(\q)\F_{ext}
+    \label{joint space EOM}
+\end{equation}
+%
+%
+where $\q \in \mathbb{R}^n$ is the joint position vector, $\M(\q)$ is the inertia matrix, $\C(\q,\qdot)$ is the coriolis vector, $\G(\q)$ is the gravity vector, $\tauBold_c$ is the command joint torques that will be explained later in this paper, $\J(\q)$ is the robot Jacobian matrix, and $\F_{ext}$ is the external force vector applied at the end effector. Note that $\tauBold_{ext}=\J^T(\q)\F_{ext}$ where $\tauBold_{ext}$ denotes the external torque vector in the joint space due to $\F_{ext}$. Similarly, equation (\ref{joint space EOM}) can be converted to the Cartesian space as
+%
+% Cartesian Space EOM
+\begin{equation}
+    \LambdaBold(\q)\xdotdot+\muBold(\q,\qdot)+\F_g(\q)=\F_c+\F_{ext}
+    \label{cartesian space EOM}
+\end{equation}
+%
+%
+where $\x \in \mathbb{R}^6$ is the end-effector position vector, $\LambdaBold(\q)=(\J\M^{-1}\J^T)^{-1}$ is the end-effector inertia matrix, $\muBold(\q,\qdot)=\LambdaBold(\J\M^{-1}\C-\Jdot\qdot)$ is the end-effector coriolis vector, $\F_g=\J^{\dagger T}\G$ is the end-effector gravity vector with the symbol $\dagger$ representing pseudoinversion, and $\F_c=\J^{\dagger T}\tauBold_c$ is the control force reflected at the end effector.
+\textcolor{red}{We need to talk about choice of pseudoinverse for Jacobian here so that the null space control is not affected. Read Fanny paper.}
+\subsection{Impedance Control}
+For this work, the desired equation of motion can be specified as
+%
+% Desired Cartesian Space EOM
+\begin{equation}
+    \LambdaBold_d\xdotdot+\Dd\xdot+\Kd(\x-\x_d)=\F_{ext}
+    \label{desired cartesian EOM}
+\end{equation}
+%
+%
+where $\LambdaBold_d$, $\Dd$, and $\Kd$ are desired inertia, damping, and stiffness matrices. $\x_d$ is the desired pose vector in the Cartesian space. Equation (\ref{desired cartesian EOM}) can be realized in the Cartesian space by setting $\F_c$ in equation (\ref{cartesian space EOM}) as
+\begin{equation}
+    \F_c=\etaBold(\q,\qdot)-\LambdaBold(\q)\LambdaBold^{-1}_d(\Dd\xdot-\Kd(\x-\x_d))-(\LambdaBold(\q)\LambdaBold^{-1}_d-\I)\F_{ext}
+    \label{classic control law}
+\end{equation}
+where $\etaBold(\q,\qdot)=\muBold(\q,\qdot)+\F_g(\q)$. Obviously, this control law depends on accurate measurement of $\F_{ext}$, which can be very difficult.
+\subsection{Adaptive Damping Design Process}
+\subsection{Null-Space Control}
+
+
+% System Stability
+\section{System Stability}
+
+% Experiments
+\section{Experiments}
+
+% Conclusions
+\section{Conclusions}
+
+
+\end{document}
