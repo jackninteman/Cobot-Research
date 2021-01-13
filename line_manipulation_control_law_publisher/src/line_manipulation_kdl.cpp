@@ -94,25 +94,29 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::vector<double> b = {0,1,0};
     std::vector<double> c = {0,0,0.3};
     Line3d line(a,b,c);*/
-    /*Line3d line(p_initial, p_final);
-    double distance_param;*/
-    Circle3d circle(p_initial, p_final, p_center);
-    double theta_param;
+    Line3d line(p_initial, p_final);
+    double distance_param;
+    //Circle3d circle(p_initial, p_final, p_center);
+    //double theta_param;
 
     // Desired and current ee position and orientation
-    //Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation,distance_param));
-    Eigen::Vector3d desired_position(circle.GetDesiredCrosstrackLocation(ee_translation,theta_param));
+    Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation,distance_param));
+    //Eigen::Vector3d desired_position(circle.GetDesiredCrosstrackLocation(ee_translation,theta_param));
     Eigen::Vector3d current_position(ee_translation);
-    Eigen::Quaterniond desired_orientation(0.0, 1.0, 0.0, 0.0);
+    Eigen::Quaterniond desired_orientation(0.0, 1.0, 0.0, 0.0); //(w,x,y,z) is the order shown here
     Eigen::Quaterniond current_orientation(ee_linear);
     
     // Compute position error
     Eigen::Matrix<double,6,1> error;
     error.head(3) << desired_position - current_position;
+
+    // Set desired velocity
+    Eigen::Matrix<double,6,1> desired_velocity_frenet;
+    desired_velocity_frenet << 0.01, 0.0, 0.0, 0.0, 0.0, 0.0;
     
     // Compute instantaneous frenet frame
-    //Eigen::Vector3d e_t(line.GetLineUnitDirection());
-    Eigen::Vector3d e_t(circle.GetUnitDirection(theta_param));
+    Eigen::Vector3d e_t(line.GetLineUnitDirection());
+    //Eigen::Vector3d e_t(circle.GetUnitDirection(theta_param));
     Eigen::Vector3d e_n(-error.head(3)/error.head(3).norm());
     Eigen::Vector3d e_b(e_n.cross(e_t));
     Eigen::Matrix<double,3,3> R3_3;
@@ -146,11 +150,14 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double,6,6> K_des;
     K_des.setZero();
     K_des(0,0) = 0;
-    K_des(1,1) = 800;
-    K_des(2,2) = 800;
+    K_des(1,1) = 500;
+    K_des(2,2) = 500;
     K_des(3,3) = 30;
     K_des(4,4) = 30;
     K_des(5,5) = 30;
+    Eigen::Matrix<double,6,6> K_des2;
+    K_des2 = K_des;
+    K_des2(0,0) = 300;
 
     // Compute pseudoinverse for Jacobian
     Eigen::MatrixXd Jacobian_pseudoInverse_transpose;
@@ -164,21 +171,28 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double,7,1> tau_null;
     Eigen::Matrix<double,7,7> identity_7by7;
     identity_7by7.setIdentity();
-    tau_null = (identity_7by7 - J_.data.transpose()*Jacobian_pseudoInverse_transpose)*null_error*800.0;
+    tau_null = (identity_7by7 - J_.data.transpose()*Jacobian_pseudoInverse_transpose)*null_error*300.0; //if the gain is too high the whole thing can vibrate within the null space
     
 
     // Compute K_bar
     Eigen::Matrix<double,6,6> K_bar(L_inverse*R*K_des*R.transpose()*L_inverse.transpose());
-    //std::cout << "K_bar: " << std::endl << K_bar << std::endl;
+    Eigen::Matrix<double,6,6> K_bar2(L_inverse*R*K_des2*R.transpose()*L_inverse.transpose());
+    std::cout << "K_bar: " << std::endl << K_bar << std::endl;
+    std::cout << "K_bar2: " << std::endl << K_bar2 << std::endl;
 
     // Compute eigenvalue and eigenvector
     Eigen::EigenSolver<Eigen::MatrixXd> es(K_bar);
+    Eigen::EigenSolver<Eigen::MatrixXd> es2(K_bar2);
     //std::cout << "The eigenvalues:" << std::endl << es.eigenvalues() << std::endl;
     //std::cout << "The eigenvector:" << std::endl << es.eigenvectors() << std::endl;
     Eigen::Matrix<double,6,6> S(es.eigenvectors().real());
     Eigen::Matrix<double,6,6> EV(es.eigenvalues().real().array().abs().sqrt().matrix().asDiagonal()*2.0*1.0);
-    //std::cout << "EV:" << std::endl << EV << std::endl;
-    //std::cout << "S:" << std::endl << S << std::endl;
+    Eigen::Matrix<double,6,6> S2(es2.eigenvectors().real());
+    Eigen::Matrix<double,6,6> EV2(es2.eigenvalues().real().array().abs().sqrt().matrix().asDiagonal()*2.0*1.0);
+    std::cout << "EV:" << std::endl << EV << std::endl;
+    std::cout << "S:" << std::endl << S << std::endl;
+    std::cout << "EV2:" << std::endl << EV2 << std::endl;
+    std::cout << "S2:" << std::endl << S2 << std::endl;
 
     // Select only non zero eigenvales and eigenvectors
     Eigen::Matrix<double,6,6> EV_new;
@@ -194,17 +208,20 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
             ++k;
         } 
     }
+    std::cout << "EV_new:" << std::endl << EV_new << std::endl;
+    std::cout << "S_new:" << std::endl << S_new << std::endl;
 
     // Compute null space matrix
     Eigen::FullPivLU<Eigen::MatrixXd> lu(K_bar);
     Eigen::MatrixXd null_space = lu.kernel();
-    //std::cout << "null_space: " << std::endl << null_space << std::endl;
+    std::cout << "null_space: " << std::endl << null_space << std::endl;
 
     // Compute orthogonal null space matrix
     Eigen::HouseholderQR<Eigen::MatrixXd> qr(null_space);
     Eigen::MatrixXd null_space_orthogonal(qr.householderQ());
     //std::cout << "null_space_orthogonal: " << std::endl << null_space_orthogonal << std::endl;
     
+    int null_index = k;
     for (int i = 0; i < null_space_orthogonal.cols(); ++i){
         S_new.col(k) = null_space_orthogonal.col(i);
         ++k;
@@ -229,7 +246,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::cout << S_new.col(3).dot(S_new.col(5)) << std::endl;
     std::cout << S_new.col(4).dot(S_new.col(5)) << std::endl;
     */
-
+    std::cout << "S_new2:" << std::endl << S_new << std::endl;
 
     // Compute desired damping matrix
     Eigen::Matrix<double,6,6> C_des(R.transpose()*L*S*EV*S.transpose()*L.transpose()*R);
@@ -237,18 +254,31 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     //C_des(1,1) = 0;
     //std::cout << "C_des:" << std::endl << C_des << std::endl;
     Eigen::Matrix<double,6,6> C_des_new(R.transpose()*L*S_new*EV_new*S_new.transpose()*L.transpose()*R);
-    //C_des_new(0,0) = 300.0;
+    Eigen::Matrix<double,6,6> EV_new_vel;
+    EV_new_vel.setZero();
+    //EV_new_vel(null_index,null_index) = 10;
+
+    Eigen::Matrix<double,6,6> C_des_new_fake;
+    C_des_new_fake.setZero();
+    C_des_new_fake(0,0) = 80.0;
+    Eigen::Matrix<double,6,6> ST_Cbar_S_new_fake(S_new.transpose()*L_inverse*R*C_des_new_fake*R.transpose()*L_inverse.transpose()*S_new);
+    EV_new_vel(null_index,null_index) = ST_Cbar_S_new_fake(null_index,null_index);
+    std::cout << "EV_new_vel:" << std::endl << EV_new_vel << std::endl;
+
+    C_des_new << C_des_new + R.transpose()*L*S_new*EV_new_vel*S_new.transpose()*L.transpose()*R;
+    //C_des_new(0,0) = 100.0;
+    std::cout << "C_des_new_just_tangent:" << std::endl << R.transpose()*L*S_new*EV_new_vel*S_new.transpose()*L.transpose()*R << std::endl;
     //C_des(1,1) = 0;
     std::cout << "C_des_new:" << std::endl << C_des_new << std::endl;
     //std::cout << "mass_cart:" << std::endl << mass_cart << std::endl;
     //std::cout << "ST_Kbar_S:" << std::endl << S.transpose()*K_bar*S << std::endl;
-    //std::cout << "ST_Kbar_S_new:" << std::endl << S_new.transpose()*K_bar*S_new << std::endl;
+    std::cout << "ST_Kbar_S_new:" << std::endl << S_new.transpose()*K_bar*S_new << std::endl;
     //std::cout << "ST_Cbar_S:" << std::endl << S.transpose()*L_inverse*R*C_des*R.transpose()*L_inverse.transpose()*S << std::endl;
-    //std::cout << "ST_Cbar_S_new:" << std::endl << S_new.transpose()*L_inverse*R*C_des_new*R.transpose()*L_inverse.transpose()*S_new << std::endl;
+    std::cout << "ST_Cbar_S_new:" << std::endl << S_new.transpose()*L_inverse*R*C_des_new*R.transpose()*L_inverse.transpose()*S_new << std::endl;
     
     //Compute Control Law
     //Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(cartesian_stiffness*error + cartesian_damping*(-J_.data*q_dot_.data)) + G_.data + C_.data;
-    Eigen::Matrix<double,7,1> tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des_new*R.transpose()*(-J_.data*q_dot_.data)) + G_.data + C_.data;
+    Eigen::Matrix<double,7,1> tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des_new*R.transpose()*(R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
     
     // Compute total control law
     tau_d = tau_d + tau_null;
