@@ -44,6 +44,9 @@ KDL::Frame ee_tf_;
 Eigen::Vector3d p_initial(0.3536,0.3536,0.5);
 Eigen::Vector3d p_final(-0.3536,0.3536,0.5);
 Eigen::Vector3d p_center(0.0,0.0,0.5);
+bool start_flag = true;
+double time_begin_in_sec;
+Eigen::Vector3d begin_cartesian_position;
 
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 { 
@@ -263,7 +266,32 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     
     //-------------Compute Control Law-------------------------------------------------------------------------
     //Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(cartesian_stiffness*error + cartesian_damping*(-J_.data*q_dot_.data)) + G_.data + C_.data;
-    Eigen::Matrix<double,7,1> tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
+    Eigen::Matrix<double,7,1> tau_d;
+    //tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
+    double time_in_sec = ros::Time::now().toSec();
+    double time_begin_in_sec;
+    std::cout << "Time now:" << time_in_sec << std::endl;
+    if(time_in_sec > 40.0)
+    {
+        if(start_flag){
+            time_begin_in_sec = time_in_sec;
+            begin_cartesian_position = desired_position;
+            start_flag = false;
+        }
+        time_in_sec = time_in_sec - time_begin_in_sec;
+        error.head(3) << line.GetDesiredPositionTrajectory(begin_cartesian_position,time_in_sec,5.0) - current_position;
+        Eigen::Matrix<double,6,1> desired_velocity_cartesian;
+        desired_velocity_cartesian.setZero();
+        desired_velocity_cartesian.head(3) << line.GetDesiredVelocityTrajectory(begin_cartesian_position,time_in_sec,5.0);
+        
+        tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(desired_velocity_cartesian-J_.data*q_dot_.data)) + G_.data + C_.data;
+    }
+    else
+    {
+        tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
+    }
+    
+    
     
     //-------------Compute total control law------------------------------------------------------------------
     tau_d = tau_d + tau_null;
@@ -275,6 +303,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::cout << "ST_Kbar_S:" << std::endl << S.transpose()*K_bar*S << std::endl;
     //std::cout << "ST_Cbar_S:" << std::endl << S.transpose()*L_inverse*R*C_des*R.transpose()*L_inverse.transpose()*S << std::endl;
     std::cout << "ST_Cbar_S:" << std::endl << S.transpose()*L_inverse*R*C_des*R.transpose()*L_inverse.transpose()*S << std::endl;
+    
     
     // Show R on screen
     /*std::cout << "R:" << std::endl << R << std::endl << std::endl;

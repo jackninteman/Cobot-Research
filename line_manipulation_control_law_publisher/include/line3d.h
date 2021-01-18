@@ -19,6 +19,9 @@ class Line3d
         _p_final(p_final) {}
     Eigen::Vector3d GetDesiredCrosstrackLocation(Eigen::Vector3d current_cartesian_position);
     Eigen::Vector3d GetDesiredCrosstrackLocation(Eigen::Vector3d current_cartesian_position, double &distance_param);
+    Eigen::Vector3d GetDesiredPositionTrajectory(Eigen::Vector3d begin_cartesian_position, double time_in_sec, double time_final_in_sec);
+    Eigen::Vector3d GetDesiredVelocityTrajectory(Eigen::Vector3d begin_cartesian_position, double time_in_sec, double time_final_in_sec);
+    Eigen::Vector3d GetDesiredAccelerationTrajectory(Eigen::Vector3d begin_cartesian_position, double time_in_sec, double time_final_in_sec);
     Eigen::Vector3d GetLineUnitDirection() {return (_p_final - _p_initial)/(_p_final - _p_initial).norm();}
   
   private:
