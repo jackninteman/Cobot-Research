@@ -283,8 +283,12 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
         Eigen::Matrix<double,6,1> desired_velocity_cartesian;
         desired_velocity_cartesian.setZero();
         desired_velocity_cartesian.head(3) << line.GetDesiredVelocityTrajectory(begin_cartesian_position,time_in_sec,5.0);
+
+        Eigen::Matrix<double,6,1> desired_acceleration_cartesian;
+        desired_acceleration_cartesian.setZero();
+        desired_acceleration_cartesian.head(3) << line.GetDesiredAccelerationTrajectory(begin_cartesian_position,time_in_sec,5.0);
         
-        tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(desired_velocity_cartesian-J_.data*q_dot_.data)) + G_.data + C_.data;
+        tau_d = J_.data.transpose()*(mass_cart*desired_acceleration_cartesian+ R*K_des*R.transpose()*error + R*C_des*R.transpose()*(desired_velocity_cartesian-J_.data*q_dot_.data)) + G_.data + C_.data;
     }
     else
     {
