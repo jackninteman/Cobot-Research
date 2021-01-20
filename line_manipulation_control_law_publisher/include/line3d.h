@@ -31,5 +31,5 @@ class Line3d
     Eigen::Vector3d _p_initial;
     Eigen::Vector3d _p_final;
     double GetOptimalLineParam(ecl::Array<double> X, Eigen::Vector3d current_cartesian_position);
-    double GetDistance(const Eigen::Vector3d &a, const Eigen::Vector3d &b) const;
+    double GetDistance(const Eigen::Vector3d &a, const Eigen::Vector3d &b) const; //Don't use this. It doesn't mean get distance between two points
 };

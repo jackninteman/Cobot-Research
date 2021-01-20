@@ -2,7 +2,7 @@ import rosbag
 import matplotlib.pyplot as plt
 plt.get_backend()
 
-bag = rosbag.Bag('result2.bag')
+bag = rosbag.Bag('../../../result4.bag')
 
 # Initialize some empty lists for storing the data
 tt = []
