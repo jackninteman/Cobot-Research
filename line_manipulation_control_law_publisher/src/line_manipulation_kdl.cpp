@@ -31,6 +31,7 @@ ros::Publisher joint5_torque_pub_;
 ros::Publisher joint6_torque_pub_;
 ros::Publisher joint7_torque_pub_;
 ros::Publisher pose_pub_;
+ros::Publisher traj_pub_;
 KDL::ChainDynParam* dyn_solver_raw_;
 KDL::ChainJntToJacSolver* jac_solver_raw_;
 KDL::ChainFkSolverPos_recursive* fk_solver_raw_;
@@ -159,7 +160,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     // -----------Specify cartesian stiffness------------------------------------------------------
     Eigen::Matrix<double,6,6> K_des;
     K_des.setZero();
-    K_des(0,0) = 500;
+    K_des(0,0) = 100;
     K_des(1,1) = 500;
     K_des(2,2) = 500;
     K_des(3,3) = 30;
@@ -271,7 +272,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     double time_in_sec = ros::Time::now().toSec();
     double time_begin_in_sec;
     std::cout << "Time now:" << time_in_sec << std::endl;
-    if(time_in_sec > 40.0)
+    if(time_in_sec > 120.0)
     {
         if(start_flag){
             time_begin_in_sec = time_in_sec;
@@ -279,7 +280,10 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
             start_flag = false;
         }
         time_in_sec = time_in_sec - time_begin_in_sec;
-        error.head(3) << line.GetDesiredPositionTrajectory(begin_cartesian_position,time_in_sec,5.0) - current_position;
+        Eigen::Matrix<double,3,1> desired_position_cartesian;
+        desired_position_cartesian = line.GetDesiredPositionTrajectory(begin_cartesian_position,time_in_sec,5.0); 
+        error.head(3) << desired_position_cartesian - current_position;
+        
         Eigen::Matrix<double,6,1> desired_velocity_cartesian;
         desired_velocity_cartesian.setZero();
         desired_velocity_cartesian.head(3) << line.GetDesiredVelocityTrajectory(begin_cartesian_position,time_in_sec,5.0);
@@ -288,6 +292,14 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
         desired_acceleration_cartesian.setZero();
         desired_acceleration_cartesian.head(3) << line.GetDesiredAccelerationTrajectory(begin_cartesian_position,time_in_sec,5.0);
         
+        // Publish Trajectory
+        geometry_msgs::Point traj;
+        traj.x = desired_position_cartesian[0];
+        traj.y = desired_position_cartesian[1];
+        traj.z = desired_position_cartesian[2];
+        traj_pub_.publish(traj);
+
+        // Control law for trajectory control
         tau_d = J_.data.transpose()*(mass_cart*desired_acceleration_cartesian+ R*K_des*R.transpose()*error + R*C_des*R.transpose()*(desired_velocity_cartesian-J_.data*q_dot_.data)) + G_.data + C_.data;
     }
     else
@@ -345,6 +357,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     pose.orientation.z = current_orientation.z();
     pose.orientation.w = current_orientation.w();
     pose_pub_.publish(pose);
+
 }
 
 int main(int argc, char **argv)
@@ -369,6 +382,8 @@ int main(int argc, char **argv)
     joint7_torque_pub_ = ros_node->advertise<std_msgs::Float64>("/joint7_effort/command",1);
 
     pose_pub_ = ros_node->advertise<geometry_msgs::Pose>("/pose",1);
+
+    traj_pub_ = ros_node->advertise<geometry_msgs::Point>("/traj",1);
 
     // Set rosparameter
     ros_node->setParam("/p_initial_x",p_initial[0]);
