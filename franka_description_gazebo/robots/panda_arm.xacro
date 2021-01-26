@@ -53,6 +53,24 @@
         </xacro:if>
         <dynamics damping="1.0"/>
       </joint>
+
+      <gazebo reference="${name}">
+        <disableFixedJointLumping>true</disableFixedJointLumping>
+        <sensor name="external_ft_sensor" type="force_torque">
+          <force_torque>
+            <frame>sensor</frame>
+            <measure_direction>child_to_parent</measure_direction>
+          </force_torque>
+        </sensor>
+      </gazebo>
+
+      <gazebo>
+        <plugin name="ft_sensor" filename="libgazebo_ros_ft_sensor.so">
+          <updateRate>100.0</updateRate>
+          <topicName>sensor_${name}</topicName>
+          <jointName>${name}</jointName>
+        </plugin>
+      </gazebo>
     </xacro:macro>
     <xacro:arm_link name="${arm_id}_link0" visual_mesh="package://${description_pkg}/meshes/visual/link0.dae"
       collision_mesh="package://${description_pkg}/meshes/collision/link0.stl" mass="3.06"/>

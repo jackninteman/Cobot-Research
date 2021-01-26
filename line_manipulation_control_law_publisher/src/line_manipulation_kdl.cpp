@@ -41,6 +41,7 @@ KDL::JntArray C_;
 KDL::JntSpaceInertiaMatrix H_;
 KDL::JntArray q_;
 KDL::JntArray q_dot_;
+KDL::JntArray effort_;
 KDL::Frame ee_tf_;
 Eigen::Vector3d p_initial(0.3,0.3,0.5);
 Eigen::Vector3d p_final(-0.2,0.3,0.5);
@@ -67,6 +68,14 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     q_dot_.data[4] = jointStatesPtr_->velocity[6];
     q_dot_.data[5] = jointStatesPtr_->velocity[7];
     q_dot_.data[6] = jointStatesPtr_->velocity[8];
+    
+    effort_.data[0] = jointStatesPtr_->effort[2];
+    effort_.data[1] = jointStatesPtr_->effort[3];
+    effort_.data[2] = jointStatesPtr_->effort[4];
+    effort_.data[3] = jointStatesPtr_->effort[5];
+    effort_.data[4] = jointStatesPtr_->effort[6];
+    effort_.data[5] = jointStatesPtr_->effort[7];
+    effort_.data[6] = jointStatesPtr_->effort[8];
 
     // Compute dynamics param, jacobian, and forward kinematics
     dyn_solver_raw_->JntToGravity(q_, G_);
@@ -272,7 +281,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     double time_in_sec = ros::Time::now().toSec();
     double time_begin_in_sec;
     std::cout << "Time now:" << time_in_sec << std::endl;
-    if(time_in_sec > 120.0)
+    if(time_in_sec > 1000.0)
     {
         if(start_flag){
             time_begin_in_sec = time_in_sec;
@@ -319,6 +328,10 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::cout << "ST_Kbar_S:" << std::endl << S.transpose()*K_bar*S << std::endl;
     //std::cout << "ST_Cbar_S:" << std::endl << S.transpose()*L_inverse*R*C_des*R.transpose()*L_inverse.transpose()*S << std::endl;
     std::cout << "ST_Cbar_S:" << std::endl << S.transpose()*L_inverse*R*C_des*R.transpose()*L_inverse.transpose()*S << std::endl;
+    //std::cout << "F_ext:" << std::endl << Jacobian_pseudoInverse_transpose*(effort_.data - tau_d + C_.data + G_.data) << std::endl;
+    std::cout << "effort:" << std::endl << effort_.data << std::endl;
+    std::cout << "-tau_d+C+G:" << std::endl << -tau_d + C_.data + G_.data << std::endl;
+    std::cout << "tau_d:" << std::endl << tau_d << std::endl;
     
     // Show R on screen
     /*std::cout << "R:" << std::endl << R << std::endl << std::endl;
@@ -440,6 +453,7 @@ int main(int argc, char **argv)
     J_.resize(kdl_chain_.getNrOfJoints());
     q_.resize(kdl_chain_.getNrOfJoints());
     q_dot_.resize(kdl_chain_.getNrOfJoints());
+    effort_.resize(kdl_chain_.getNrOfJoints());
     
     // Inverse dynamics solver
 	dyn_solver_.reset(new KDL::ChainDynParam(kdl_chain_, gravity_));
