@@ -4,6 +4,7 @@
 
 #include <cmath>
 
+// ------ Need to clean up this code. This is just to show a straight line or circle on rviz------
 int main( int argc, char** argv )
 {
   ros::init(argc, argv, "points_and_lines");

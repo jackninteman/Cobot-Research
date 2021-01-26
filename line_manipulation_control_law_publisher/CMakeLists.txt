@@ -10,8 +10,6 @@ add_compile_options(-std=c++11)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
-  ecl_geometry
-  moveit_ros_planning_interface
   kdl_parser
 )
 
@@ -132,11 +130,7 @@ include_directories(include ${catkin_INCLUDE_DIRS})
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(line_manipulation_control_law_publisher_node src/line_manipulation_control_law_publisher_node.cpp src/line3d.cpp)
 add_executable(line_manipulation_kdl_node src/line_manipulation_kdl.cpp src/line3d.cpp src/circle3d.cpp)
-add_executable(test_node src/test.cpp src/line3d.cpp)
-add_executable(test_jacobian_node src/test_jacobian_node.cpp)
-add_executable(test_line3d_node src/test_line3d_node.cpp src/line3d.cpp)
 add_executable(kdl_test_node src/kdl_test.cpp)
 add_executable(line_rviz_publisher_node src/line_rviz_publisher.cpp)
 
@@ -151,12 +145,8 @@ add_executable(line_rviz_publisher_node src/line_rviz_publisher.cpp)
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(line_manipulation_control_law_publisher_node ${catkin_LIBRARIES})
 target_link_libraries(line_manipulation_kdl_node ${catkin_LIBRARIES})
-target_link_libraries(test_jacobian_node ${catkin_LIBRARIES})
-target_link_libraries(test_line3d_node ${catkin_LIBRARIES})
 target_link_libraries(kdl_test_node ${catkin_LIBRARIES})
-target_link_libraries(test_node ${catkin_LIBRARIES})
 target_link_libraries(line_rviz_publisher_node ${catkin_LIBRARIES})
 #############
 ## Install ##

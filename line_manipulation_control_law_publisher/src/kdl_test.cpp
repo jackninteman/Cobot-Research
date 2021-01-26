@@ -7,6 +7,7 @@
 #include <ros/ros.h>
 #include <Eigen/Dense>
 
+// -----------------------This program is just for testing kdl library -------------------------------
 int main(int argc, char **argv)
 {
     // Init this ros node

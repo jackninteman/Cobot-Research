@@ -3,10 +3,9 @@
   <arg name="debug" default="false" />
   
   <!--Load Gazebo empty world-->
-  <include file="$(find open_manipulator_gazebo_modified)/launch/gazebo_launch.launch"/>
+  <include file="$(find franka_gazebo)/launch/gazebo_launch.launch"/>
   
   <!-- Load the URDF into the ROS Parameter Server -->
-  <!--include file="$(find open_manipulator_description_modified)/launch/open_manipulator_upload.launch"/-->
   <include file="$(find franka_description_gazebo)/launch/franka_upload.launch"/>
 
   <!-- Run a python script to the send a service call to gazebo_ros to spawn a URDF robot -->
@@ -16,11 +15,10 @@
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen"/>
   
   <!-- Run controller utils -->
-  <include file="$(find open_manipulator_gazebo_modified)/launch/controller_utils.launch"/>
+  <include file="$(find franka_gazebo)/launch/controller_utils.launch"/>
   
   <!-- ros_control robotis manipulator launch file -->
-  <!--include file="$(find open_manipulator_gazebo_modified)/launch/open_manipulator_controller.launch"/-->
-  <include file="$(find open_manipulator_gazebo_modified)/launch/franka_controller.launch"/>
+  <include file="$(find franka_gazebo)/launch/franka_controller.launch"/>
 
   <include file="$(find line_manipulation_control_law_publisher)/launch/control_law_and_rviz_display.launch"/>
 </launch>

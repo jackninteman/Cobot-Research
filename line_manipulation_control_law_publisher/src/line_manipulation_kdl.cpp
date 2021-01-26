@@ -4,9 +4,6 @@
 #include <geometry_msgs/Point.h>
 #include <iostream>
 #include <memory>
-//#include <moveit/robot_model_loader/robot_model_loader.h>
-//#include <moveit/robot_model/robot_model.h>
-//#include <moveit/robot_state/robot_state.h>
 #include <kdl/tree.hpp>
 #include <kdl/kdl.hpp>
 #include <kdl/chain.hpp>
@@ -18,8 +15,6 @@
 #include "line3d.h"
 #include "circle3d.h"
 #include "pseudo_inversion.h"
-
-
 #include <ros/ros.h>
 
 // Global variable declaration
@@ -52,7 +47,7 @@ Eigen::Vector3d begin_cartesian_position;
 
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 { 
-    // Explicit assignment for joint position and velocity
+    // Explicit assignment for joint position, velocity, and effort
     q_.data[0] = jointStatesPtr_->position[2];
     q_.data[1] = jointStatesPtr_->position[3];
     q_.data[2] = jointStatesPtr_->position[4];
@@ -102,12 +97,9 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     // Need to transpose below for proper rotation matrix definition
     Eigen::Quaterniond ee_linear(rotation_matrix.transpose());
 
+
     // -----------Line/Circle Parameters----------------------------------------------------------
     // Setup line parameter
-    /*std::vector<double> a = {0,1,0};
-    std::vector<double> b = {0,1,0};
-    std::vector<double> c = {0,0,0.3};
-    Line3d line(a,b,c);*/
     Line3d line(p_initial, p_final);
     double distance_param;
     // Setup circle parameter
@@ -133,7 +125,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Quaterniond error_quaternion(current_orientation.inverse()*desired_orientation);
     error.tail(3) << error_quaternion.x(), error_quaternion.y(), error_quaternion.z();
     error.tail(3) << current_orientation*error.tail(3);
-    //error.tail(3) << 0,0,0; //Don't care about orientation for now
+    //error.tail(3) << 0,0,0; //Use this if we don't care about orientation
 
 
     // -----------EE Twist: Set desired twist in frenet frame----------------------------------------
@@ -343,7 +335,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::cout << line.GetLineUnitDirection() << std::endl;
     */
 
-    //Publish Control Law to each joint
+    // Publish Control Law to each joint
     std_msgs::Float64 msg;
     msg.data = tau_d[0];
     joint1_torque_pub_.publish(msg);
@@ -419,7 +411,6 @@ int main(int argc, char **argv)
     std::unique_ptr<KDL::ChainDynParam> dyn_solver_;
     std::unique_ptr<KDL::ChainJntToJacSolver> jac_solver_;
     std::unique_ptr<KDL::ChainFkSolverPos_recursive> fk_solver_;
-    std::unique_ptr<KDL::ChainFkSolverPos_recursive> fk_solver_2_;
     
     // Read robot description ros param
     std::string robot_desc_string;
