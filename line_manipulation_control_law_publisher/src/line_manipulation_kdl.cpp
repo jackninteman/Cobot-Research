@@ -2,6 +2,9 @@
 #include <sensor_msgs/JointState.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/Point.h>
+#include <geometry_msgs/WrenchStamped.h>
+#include <message_filters/subscriber.h>
+#include <message_filters/time_synchronizer.h>
 #include <iostream>
 #include <memory>
 #include <kdl/tree.hpp>
@@ -30,6 +33,7 @@ ros::Publisher traj_pub_;
 KDL::ChainDynParam* dyn_solver_raw_;
 KDL::ChainJntToJacSolver* jac_solver_raw_;
 KDL::ChainFkSolverPos_recursive* fk_solver_raw_;
+KDL::ChainFkSolverPos_recursive* fk_solver_force_frame_raw_;
 KDL::Jacobian J_;
 KDL::JntArray G_;
 KDL::JntArray C_;
@@ -38,12 +42,21 @@ KDL::JntArray q_;
 KDL::JntArray q_dot_;
 KDL::JntArray effort_;
 KDL::Frame ee_tf_;
+KDL::Frame force_frame_tf_;
+Eigen::Vector3d ext_force_body;
 Eigen::Vector3d p_initial(0.3,0.3,0.5);
 Eigen::Vector3d p_final(-0.2,0.3,0.5);
 Eigen::Vector3d p_center(0.0,0.0,0.5);
 bool start_flag = true;
 double time_begin_in_sec;
 Eigen::Vector3d begin_cartesian_position;
+
+void ForceSensorPublisher(const geometry_msgs::WrenchStamped::ConstPtr &forceSensorPtr_)
+{
+    ext_force_body[0] = forceSensorPtr_->wrench.force.x;
+    ext_force_body[1] = forceSensorPtr_->wrench.force.y;
+    ext_force_body[2] = forceSensorPtr_->wrench.force.z;
+}
 
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 { 
@@ -72,12 +85,19 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     effort_.data[5] = jointStatesPtr_->effort[7];
     effort_.data[6] = jointStatesPtr_->effort[8];
 
+    /*Eigen::Vector3d ext_force_body_frame;
+    ext_force_body_frame[0] = forceSensorPtr_-> wrench.force.x;
+    ext_force_body_frame[1] = forceSensorPtr_-> wrench.force.y;
+    ext_force_body_frame[2] = forceSensorPtr_-> wrench.force.z;
+    */
+
     // Compute dynamics param, jacobian, and forward kinematics
     dyn_solver_raw_->JntToGravity(q_, G_);
     dyn_solver_raw_ ->JntToCoriolis(q_,q_dot_,C_);
     dyn_solver_raw_->JntToMass(q_,H_);
     jac_solver_raw_->JntToJac(q_, J_);
     fk_solver_raw_->JntToCart(q_,ee_tf_);
+    fk_solver_force_frame_raw_->JntToCart(q_,force_frame_tf_);
 
     // Compute mass matrix in cartesian space
     Eigen::MatrixXd mass_joint_inverse;
@@ -96,6 +116,8 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix3d rotation_matrix = Eigen::Map<Eigen::Matrix3d>(ee_tf_.M.data);
     // Need to transpose below for proper rotation matrix definition
     Eigen::Quaterniond ee_linear(rotation_matrix.transpose());
+    Eigen::Matrix3d force_rotation_matrix = Eigen::Map<Eigen::Matrix3d>(force_frame_tf_.M.data);
+    force_rotation_matrix = force_rotation_matrix.transpose();
 
 
     // -----------Line/Circle Parameters----------------------------------------------------------
@@ -130,7 +152,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // -----------EE Twist: Set desired twist in frenet frame----------------------------------------
     Eigen::Matrix<double,6,1> desired_velocity_frenet;
-    desired_velocity_frenet << 0.01, 0.0, 0.0, 0.0, 0.0, 0.0; //in order e_t,e_b,e_n,e_t,e_b,e_n
+    desired_velocity_frenet << 0.1, 0.0, 0.0, 0.0, 0.0, 0.0; //in order e_t,e_b,e_n,e_t,e_b,e_n
     
 
     // -----------Compute instantaneous frenet frame and rotation matrix------------------------------
@@ -161,9 +183,9 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     // -----------Specify cartesian stiffness------------------------------------------------------
     Eigen::Matrix<double,6,6> K_des;
     K_des.setZero();
-    K_des(0,0) = 100;
-    K_des(1,1) = 500;
-    K_des(2,2) = 500;
+    K_des(0,0) = 10000;
+    K_des(1,1) = 1000;
+    K_des(2,2) = 1000;
     K_des(3,3) = 30;
     K_des(4,4) = 30;
     K_des(5,5) = 30;
@@ -265,7 +287,9 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double,6,6> C_des(R.transpose()*L*S*EV*S.transpose()*L.transpose()*R);
     //std::cout << "C_des:" << std::endl << C_des << std::endl;
 
-    
+    // ------------Compute external force in global frame-----------------------------------------------------
+    Eigen::Matrix<double,3,1> ext_force_global(force_rotation_matrix*ext_force_body);
+
     //-------------Compute Control Law-------------------------------------------------------------------------
     //Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(cartesian_stiffness*error + cartesian_damping*(-J_.data*q_dot_.data)) + G_.data + C_.data;
     Eigen::Matrix<double,7,1> tau_d;
@@ -303,9 +327,20 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
         // Control law for trajectory control
         tau_d = J_.data.transpose()*(mass_cart*desired_acceleration_cartesian+ R*K_des*R.transpose()*error + R*C_des*R.transpose()*(desired_velocity_cartesian-J_.data*q_dot_.data)) + G_.data + C_.data;
     }
+    else if(ext_force_global.dot(e_t) > 20)
+    {
+        tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
+        std::cout << "Pos vel" << std::endl;
+    }
+    else if(ext_force_global.dot(e_t) < -20)
+    {
+        tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(-R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
+        std::cout << "Neg vel" << std::endl;
+    }
     else
     {
         tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(-J_.data*q_dot_.data)) + G_.data + C_.data;
+        std::cout << "Cross track only" << std::endl;
     }
     
     
@@ -314,16 +349,19 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     tau_d = tau_d + tau_null;
 
     //-------------For debugging only-------------------------------------------------------------------------
-    std::cout << "C_des:" << std::endl << C_des << std::endl;
+    //std::cout << "C_des:" << std::endl << C_des << std::endl;
     //std::cout << "mass_cart:" << std::endl << mass_cart << std::endl;
     //std::cout << "ST_Kbar_S:" << std::endl << S.transpose()*K_bar*S << std::endl;
-    std::cout << "ST_Kbar_S:" << std::endl << S.transpose()*K_bar*S << std::endl;
+    //std::cout << "ST_Kbar_S:" << std::endl << S.transpose()*K_bar*S << std::endl;
     //std::cout << "ST_Cbar_S:" << std::endl << S.transpose()*L_inverse*R*C_des*R.transpose()*L_inverse.transpose()*S << std::endl;
-    std::cout << "ST_Cbar_S:" << std::endl << S.transpose()*L_inverse*R*C_des*R.transpose()*L_inverse.transpose()*S << std::endl;
+    //std::cout << "ST_Cbar_S:" << std::endl << S.transpose()*L_inverse*R*C_des*R.transpose()*L_inverse.transpose()*S << std::endl;
     //std::cout << "F_ext:" << std::endl << Jacobian_pseudoInverse_transpose*(effort_.data - tau_d + C_.data + G_.data) << std::endl;
-    std::cout << "effort:" << std::endl << effort_.data << std::endl;
-    std::cout << "-tau_d+C+G:" << std::endl << -tau_d + C_.data + G_.data << std::endl;
-    std::cout << "tau_d:" << std::endl << tau_d << std::endl;
+    //std::cout << "effort:" << std::endl << effort_.data << std::endl;
+    //std::cout << "tau_d-C-G-tau_null:" << std::endl << tau_d - C_.data - G_.data - tau_null << std::endl;
+    //std::cout << "tau_d:" << std::endl << tau_d << std::endl;
+    //std::cout << "ext_force_body:" << std::endl << ext_force_body << std::endl;
+    //std::cout << "ext_force_global" << std::endl << ext_force_global << std::endl;
+    std::cout << "ext_force_global_dot_et" << std::endl << ext_force_global.dot(e_t) << std::endl;
     
     // Show R on screen
     /*std::cout << "R:" << std::endl << R << std::endl << std::endl;
@@ -403,14 +441,24 @@ int main(int argc, char **argv)
     ros::SubscribeOptions jointStateSubOption = ros::SubscribeOptions::create<sensor_msgs::JointState>(
         "/joint_states", 1, ControlLawPublisher, ros::VoidPtr(), ros_node->getCallbackQueue());
     ros::Subscriber jointStateSubscriber = ros_node->subscribe(jointStateSubOption);
+    /*message_filters::Subscriber<sensor_msgs::JointState> jointStateSubscriber(*ros_node, "/joint_states", 1);
+    message_filters::Subscriber<geometry_msgs::WrenchStamped> forceSensorSubscriber(*ros_node, "/sensor_panda_joint7", 1);
+    message_filters::TimeSynchronizer<sensor_msgs::JointState, geometry_msgs::WrenchStamped> sync(jointStateSubscriber, forceSensorSubscriber, 10);
+    sync.registerCallback(boost::bind(&ControlLawPublisher, _1, _2));*/
+
+    // Setup subscriber to force sensor
+    ros::SubscribeOptions forceSensorSubOption = ros::SubscribeOptions::create<geometry_msgs::WrenchStamped>(
+        "/sensor_panda_joint7", 1, ForceSensorPublisher, ros::VoidPtr(), ros_node->getCallbackQueue());
+    ros::Subscriber forceSensorSubscriber = ros_node->subscribe(forceSensorSubOption);
 
     // Declare kdl stuff
     KDL::Tree 	kdl_tree_;
 	KDL::Chain	kdl_chain_;
-    KDL::Chain  kdl_chain_2_;
+    KDL::Chain  kdl_chain_force_frame_;
     std::unique_ptr<KDL::ChainDynParam> dyn_solver_;
     std::unique_ptr<KDL::ChainJntToJacSolver> jac_solver_;
     std::unique_ptr<KDL::ChainFkSolverPos_recursive> fk_solver_;
+    std::unique_ptr<KDL::ChainFkSolverPos_recursive> fk_solver_force_frame_;
     
     // Read robot description ros param
     std::string robot_desc_string;
@@ -426,7 +474,13 @@ int main(int argc, char **argv)
     // Get kdl chain
     std::string root_name = "world";
 	std::string tip_name = "end_effector_link";
+    std::string force_frame_name = "panda_link7";
 	  if(!kdl_tree_.getChain(root_name, tip_name, kdl_chain_))
+      {
+          ROS_ERROR("Failed to construct kdl chain");
+          return false;
+      }
+      if(!kdl_tree_.getChain(root_name, force_frame_name, kdl_chain_force_frame_))
       {
           ROS_ERROR("Failed to construct kdl chain");
           return false;
@@ -450,10 +504,12 @@ int main(int argc, char **argv)
 	dyn_solver_.reset(new KDL::ChainDynParam(kdl_chain_, gravity_));
     jac_solver_.reset(new KDL::ChainJntToJacSolver(kdl_chain_));
     fk_solver_.reset(new KDL::ChainFkSolverPos_recursive(kdl_chain_));
+    fk_solver_force_frame_.reset(new KDL::ChainFkSolverPos_recursive(kdl_chain_force_frame_));
 
     dyn_solver_raw_ = dyn_solver_.get();
     jac_solver_raw_ = jac_solver_.get();
     fk_solver_raw_ = fk_solver_.get();
+    fk_solver_force_frame_raw_ = fk_solver_force_frame_.get();
 
     // Done with all the setup. Now wait in ros::spin until we get something from subscription
     ros::spin();

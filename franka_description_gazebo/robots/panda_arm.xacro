@@ -57,6 +57,7 @@
       <gazebo reference="${name}">
         <disableFixedJointLumping>true</disableFixedJointLumping>
         <sensor name="external_ft_sensor" type="force_torque">
+          <visualize>true</visualize>
           <force_torque>
             <frame>sensor</frame>
             <measure_direction>child_to_parent</measure_direction>
