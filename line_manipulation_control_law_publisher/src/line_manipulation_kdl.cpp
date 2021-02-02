@@ -2,6 +2,7 @@
 #include <sensor_msgs/JointState.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/Point.h>
+#include <geometry_msgs/Twist.h>
 #include <geometry_msgs/WrenchStamped.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
@@ -30,6 +31,7 @@ ros::Publisher joint6_torque_pub_;
 ros::Publisher joint7_torque_pub_;
 ros::Publisher pose_pub_;
 ros::Publisher traj_pub_;
+ros::Publisher twist_pub_;
 KDL::ChainDynParam* dyn_solver_raw_;
 KDL::ChainJntToJacSolver* jac_solver_raw_;
 KDL::ChainFkSolverPos_recursive* fk_solver_raw_;
@@ -327,12 +329,12 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
         // Control law for trajectory control
         tau_d = J_.data.transpose()*(mass_cart*desired_acceleration_cartesian+ R*K_des*R.transpose()*error + R*C_des*R.transpose()*(desired_velocity_cartesian-J_.data*q_dot_.data)) + G_.data + C_.data;
     }
-    else if(ext_force_global.dot(e_t) > 20)
+    else if(ext_force_global.dot(e_t) > 50)
     {
         tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
         std::cout << "Pos vel" << std::endl;
     }
-    else if(ext_force_global.dot(e_t) < -20)
+    else if(ext_force_global.dot(e_t) < -50)
     {
         tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(-R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
         std::cout << "Neg vel" << std::endl;
@@ -401,6 +403,17 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     pose.orientation.w = current_orientation.w();
     pose_pub_.publish(pose);
 
+    Eigen::Matrix<double, 6, 1> vel(J_.data*q_dot_.data);
+    geometry_msgs::Twist twist;
+    twist.linear.x = vel[0];
+    twist.linear.y = vel[1];
+    twist.linear.z = vel[2];
+    twist.angular.x = vel[3];
+    twist.angular.y = vel[4];
+    twist.angular.z = vel[5];
+    twist_pub_.publish(twist);
+
+
 }
 
 int main(int argc, char **argv)
@@ -427,6 +440,7 @@ int main(int argc, char **argv)
     pose_pub_ = ros_node->advertise<geometry_msgs::Pose>("/pose",1);
 
     traj_pub_ = ros_node->advertise<geometry_msgs::Point>("/traj",1);
+    twist_pub_ = ros_node->advertise<geometry_msgs::Twist>("/twist",1);
 
     // Set rosparameter
     ros_node->setParam("/p_initial_x",p_initial[0]);
