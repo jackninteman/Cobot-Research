@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   kdl_parser
   message_filters
+  rviz_visual_tools
 )
 
 ## System dependencies are found with CMake's conventions
@@ -131,7 +132,7 @@ include_directories(include ${catkin_INCLUDE_DIRS})
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(line_manipulation_kdl_node src/line_manipulation_kdl.cpp src/line3d.cpp src/circle3d.cpp)
+add_executable(line_manipulation_kdl_node src/line_manipulation_kdl.cpp src/line3d.cpp src/circle3d.cpp src/plane3d.cpp)
 add_executable(kdl_test_node src/kdl_test.cpp)
 add_executable(line_rviz_publisher_node src/line_rviz_publisher.cpp)
 

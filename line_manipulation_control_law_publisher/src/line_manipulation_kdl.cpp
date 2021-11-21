@@ -18,6 +18,7 @@
 #include <Eigen/Dense>
 #include "line3d.h"
 #include "circle3d.h"
+#include "plane3d.h"
 #include "pseudo_inversion.h"
 #include <ros/ros.h>
 
@@ -46,9 +47,11 @@ KDL::JntArray effort_;
 KDL::Frame ee_tf_;
 KDL::Frame force_frame_tf_;
 Eigen::Vector3d ext_force_body;
-Eigen::Vector3d p_initial(0.3,0.3,0.5);
+Eigen::Vector3d p_initial(0,0,0.3);
 Eigen::Vector3d p_final(-0.2,0.3,0.5);
 Eigen::Vector3d p_center(0.0,0.0,0.5);
+Eigen::Vector3d p_2(1,2,2);
+Eigen::Vector3d p_3(2,5,4);
 bool start_flag = true;
 double time_begin_in_sec;
 Eigen::Vector3d begin_cartesian_position;
@@ -124,16 +127,20 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // -----------Line/Circle Parameters----------------------------------------------------------
     // Setup line parameter
-    Line3d line(p_initial, p_final);
-    double distance_param;
+    // Line3d line(p_initial, p_final);
+    // double distance_param;
     // Setup circle parameter
     //Circle3d circle(p_initial, p_final, p_center);
     //double theta_param;
+    // Setup plane parameter
+    Plane3d plane(p_initial, p_2, p_3);
+    double distance_param_x, distance_param_y;
 
 
     // ----------EE Pos: Set Desired and get current ee position and orientation-------------------
-    Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation,distance_param));
+    //Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation,distance_param));
     //Eigen::Vector3d desired_position(circle.GetDesiredCrosstrackLocation(ee_translation,theta_param));
+    Eigen::Vector3d desired_position(plane.GetDesiredCrosstrackLocation(ee_translation,distance_param_x, distance_param_y));
     Eigen::Vector3d current_position(ee_translation);
     Eigen::Quaterniond desired_orientation(0.0, 1.0, 0.0, 0.0); //(w,x,y,z) is the order shown here
     Eigen::Quaterniond current_orientation(ee_linear);
@@ -158,8 +165,9 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     
 
     // -----------Compute instantaneous frenet frame and rotation matrix------------------------------
-    Eigen::Vector3d e_t(line.GetLineUnitDirection());
+    //Eigen::Vector3d e_t(line.GetLineUnitDirection());
     //Eigen::Vector3d e_t(circle.GetUnitDirection(theta_param));
+    Eigen::Vector3d e_t((plane.GetPlaneUnitDirection()).col(0));
     Eigen::Vector3d e_n(-error.head(3)/error.head(3).norm());
     Eigen::Vector3d e_b(e_n.cross(e_t));
     Eigen::Matrix<double,3,3> R3_3;
@@ -301,33 +309,33 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::cout << "Time now:" << time_in_sec << std::endl;
     if(time_in_sec > 1000.0)
     {
-        if(start_flag){
-            time_begin_in_sec = time_in_sec;
-            begin_cartesian_position = desired_position;
-            start_flag = false;
-        }
-        time_in_sec = time_in_sec - time_begin_in_sec;
-        Eigen::Matrix<double,3,1> desired_position_cartesian;
-        desired_position_cartesian = line.GetDesiredPositionTrajectory(begin_cartesian_position,time_in_sec,5.0); 
-        error.head(3) << desired_position_cartesian - current_position;
+        // if(start_flag){
+        //     time_begin_in_sec = time_in_sec;
+        //     begin_cartesian_position = desired_position;
+        //     start_flag = false;
+        // }
+        // time_in_sec = time_in_sec - time_begin_in_sec;
+        // Eigen::Matrix<double,3,1> desired_position_cartesian;
+        // desired_position_cartesian = line.GetDesiredPositionTrajectory(begin_cartesian_position,time_in_sec,5.0); 
+        // error.head(3) << desired_position_cartesian - current_position;
         
-        Eigen::Matrix<double,6,1> desired_velocity_cartesian;
-        desired_velocity_cartesian.setZero();
-        desired_velocity_cartesian.head(3) << line.GetDesiredVelocityTrajectory(begin_cartesian_position,time_in_sec,5.0);
+        // Eigen::Matrix<double,6,1> desired_velocity_cartesian;
+        // desired_velocity_cartesian.setZero();
+        // desired_velocity_cartesian.head(3) << line.GetDesiredVelocityTrajectory(begin_cartesian_position,time_in_sec,5.0);
 
-        Eigen::Matrix<double,6,1> desired_acceleration_cartesian;
-        desired_acceleration_cartesian.setZero();
-        desired_acceleration_cartesian.head(3) << line.GetDesiredAccelerationTrajectory(begin_cartesian_position,time_in_sec,5.0);
+        // Eigen::Matrix<double,6,1> desired_acceleration_cartesian;
+        // desired_acceleration_cartesian.setZero();
+        // desired_acceleration_cartesian.head(3) << line.GetDesiredAccelerationTrajectory(begin_cartesian_position,time_in_sec,5.0);
         
-        // Publish Trajectory
-        geometry_msgs::Point traj;
-        traj.x = desired_position_cartesian[0];
-        traj.y = desired_position_cartesian[1];
-        traj.z = desired_position_cartesian[2];
-        traj_pub_.publish(traj);
+        // // Publish Trajectory
+        // geometry_msgs::Point traj;
+        // traj.x = desired_position_cartesian[0];
+        // traj.y = desired_position_cartesian[1];
+        // traj.z = desired_position_cartesian[2];
+        // traj_pub_.publish(traj);
 
-        // Control law for trajectory control
-        tau_d = J_.data.transpose()*(mass_cart*desired_acceleration_cartesian+ R*K_des*R.transpose()*error + R*C_des*R.transpose()*(desired_velocity_cartesian-J_.data*q_dot_.data)) + G_.data + C_.data;
+        // // Control law for trajectory control
+        // tau_d = J_.data.transpose()*(mass_cart*desired_acceleration_cartesian+ R*K_des*R.transpose()*error + R*C_des*R.transpose()*(desired_velocity_cartesian-J_.data*q_dot_.data)) + G_.data + C_.data;
     }
     else if(ext_force_global.dot(e_t) > 50)
     {
@@ -449,6 +457,13 @@ int main(int argc, char **argv)
     ros_node->setParam("/p_final_x",p_final[0]);
     ros_node->setParam("/p_final_y",p_final[1]);
     ros_node->setParam("/p_final_z",p_final[2]);
+    Plane3d plane(p_initial, p_2, p_3);
+    Eigen::Quaterniond plane_orientation(plane.GetPlaneUnitDirection());
+    ros_node->setParam("/plane_orientation_w", plane_orientation.w());
+    ros_node->setParam("/plane_orientation_x", plane_orientation.x());
+    ros_node->setParam("/plane_orientation_y", plane_orientation.y());
+    ros_node->setParam("/plane_orientation_z", plane_orientation.z());
+
     
     // Setup subscriber to joint state controller
     // Whenever we receive actual joint states, we will use callback function above to publish desired joint states
