@@ -12,7 +12,6 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   kdl_parser
   message_filters
-  rviz_visual_tools
 )
 
 ## System dependencies are found with CMake's conventions
