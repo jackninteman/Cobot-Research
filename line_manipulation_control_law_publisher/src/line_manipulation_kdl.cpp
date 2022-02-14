@@ -1,5 +1,6 @@
 #include <std_msgs/Float64.h>
 #include <sensor_msgs/JointState.h>
+#include <sensor_msgs/Joy.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/Twist.h>
@@ -21,6 +22,7 @@
 #include "plane3d.h"
 #include "pseudo_inversion.h"
 #include <ros/ros.h>
+#include <gazebo_msgs/ApplyBodyWrench.h>
 
 // Global variable declaration
 ros::Publisher joint1_torque_pub_;
@@ -33,6 +35,9 @@ ros::Publisher joint7_torque_pub_;
 ros::Publisher pose_pub_;
 ros::Publisher traj_pub_;
 ros::Publisher twist_pub_;
+ros::ServiceClient wrench_client;
+gazebo_msgs::ApplyBodyWrench::Request apply_wrench_req;
+gazebo_msgs::ApplyBodyWrench::Response apply_wrench_resp;
 KDL::ChainDynParam* dyn_solver_raw_;
 KDL::ChainJntToJacSolver* jac_solver_raw_;
 KDL::ChainFkSolverPos_recursive* fk_solver_raw_;
@@ -47,14 +52,42 @@ KDL::JntArray effort_;
 KDL::Frame ee_tf_;
 KDL::Frame force_frame_tf_;
 Eigen::Vector3d ext_force_body;
-Eigen::Vector3d p_initial(0,0,0.3);
-Eigen::Vector3d p_final(-0.2,0.3,0.5);
+Eigen::Vector3d ext_force_joystick;
+Eigen::Vector3d p_initial(0,0,0.6);
+Eigen::Vector3d p_final(0.5,0,0.6);
 Eigen::Vector3d p_center(0.0,0.0,0.5);
 Eigen::Vector3d p_2(1,2,2);
 Eigen::Vector3d p_3(2,5,4);
 bool start_flag = true;
 double time_begin_in_sec;
 Eigen::Vector3d begin_cartesian_position;
+
+void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
+{
+    ext_force_joystick[0] = (joystickhandlePtr_->axes[0])*(-1.0); // force along x-axis
+    ext_force_joystick[1] = 0; // force along y-axis is always zero for now
+    ext_force_joystick[2] = joystickhandlePtr_->axes[1]; // force along z-axis
+    bool buttonX = joystickhandlePtr_->buttons[0]; // x button
+
+
+    double max_force = 20;
+    apply_wrench_req.body_name = "franka::panda_link7";
+    apply_wrench_req.reference_frame = "world";
+    apply_wrench_req.wrench.force.x = ext_force_joystick[0]*max_force;
+    apply_wrench_req.wrench.force.y = ext_force_joystick[1]*max_force;
+    apply_wrench_req.wrench.force.z = ext_force_joystick[2]*max_force;
+    // apply_wrench_req.start_time = 0;
+    apply_wrench_req.duration = (ros::Duration)(-1);
+    wrench_client.call(apply_wrench_req, apply_wrench_resp);
+
+    if (buttonX){
+        std_msgs::Float64 msg;
+        msg.data = -100;
+        joint4_torque_pub_.publish(msg);
+    }
+   
+    
+}
 
 void ForceSensorPublisher(const geometry_msgs::WrenchStamped::ConstPtr &forceSensorPtr_)
 {
@@ -127,20 +160,20 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // -----------Line/Circle Parameters----------------------------------------------------------
     // Setup line parameter
-    // Line3d line(p_initial, p_final);
-    // double distance_param;
+    Line3d line(p_initial, p_final);
+    double distance_param;
     // Setup circle parameter
     //Circle3d circle(p_initial, p_final, p_center);
     //double theta_param;
     // Setup plane parameter
-    Plane3d plane(p_initial, p_2, p_3);
-    double distance_param_x, distance_param_y;
+    // Plane3d plane(p_initial, p_2, p_3);
+    // double distance_param_x, distance_param_y;
 
 
     // ----------EE Pos: Set Desired and get current ee position and orientation-------------------
-    //Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation,distance_param));
+    Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation,distance_param));
     //Eigen::Vector3d desired_position(circle.GetDesiredCrosstrackLocation(ee_translation,theta_param));
-    Eigen::Vector3d desired_position(plane.GetDesiredCrosstrackLocation(ee_translation,distance_param_x, distance_param_y));
+    // Eigen::Vector3d desired_position(plane.GetDesiredCrosstrackLocation(ee_translation,distance_param_x, distance_param_y));
     Eigen::Vector3d current_position(ee_translation);
     Eigen::Quaterniond desired_orientation(0.0, 1.0, 0.0, 0.0); //(w,x,y,z) is the order shown here
     Eigen::Quaterniond current_orientation(ee_linear);
@@ -165,9 +198,9 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     
 
     // -----------Compute instantaneous frenet frame and rotation matrix------------------------------
-    //Eigen::Vector3d e_t(line.GetLineUnitDirection());
+    Eigen::Vector3d e_t(line.GetLineUnitDirection());
     //Eigen::Vector3d e_t(circle.GetUnitDirection(theta_param));
-    Eigen::Vector3d e_t((plane.GetPlaneUnitDirection()).col(0));
+    // Eigen::Vector3d e_t((plane.GetPlaneUnitDirection()).col(0));
     Eigen::Vector3d e_n(-error.head(3)/error.head(3).norm());
     Eigen::Vector3d e_b(e_n.cross(e_t));
     Eigen::Matrix<double,3,3> R3_3;
@@ -193,7 +226,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     // -----------Specify cartesian stiffness------------------------------------------------------
     Eigen::Matrix<double,6,6> K_des;
     K_des.setZero();
-    K_des(0,0) = 10000;
+    K_des(0,0) = 1000;
     K_des(1,1) = 1000;
     K_des(2,2) = 1000;
     K_des(3,3) = 30;
@@ -337,16 +370,16 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
         // // Control law for trajectory control
         // tau_d = J_.data.transpose()*(mass_cart*desired_acceleration_cartesian+ R*K_des*R.transpose()*error + R*C_des*R.transpose()*(desired_velocity_cartesian-J_.data*q_dot_.data)) + G_.data + C_.data;
     }
-    else if(ext_force_global.dot(e_t) > 50)
-    {
-        tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
-        std::cout << "Pos vel" << std::endl;
-    }
-    else if(ext_force_global.dot(e_t) < -50)
-    {
-        tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(-R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
-        std::cout << "Neg vel" << std::endl;
-    }
+    // else if(ext_force_global.dot(e_t) > 50)
+    // {
+    //     tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
+    //     std::cout << "Pos vel" << std::endl;
+    // }
+    // else if(ext_force_global.dot(e_t) < -50)
+    // {
+    //     tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(-R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
+    //     std::cout << "Neg vel" << std::endl;
+    // }
     else
     {
         tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(-J_.data*q_dot_.data)) + G_.data + C_.data;
@@ -479,6 +512,14 @@ int main(int argc, char **argv)
     ros::SubscribeOptions forceSensorSubOption = ros::SubscribeOptions::create<geometry_msgs::WrenchStamped>(
         "/sensor_panda_joint7", 1, ForceSensorPublisher, ros::VoidPtr(), ros_node->getCallbackQueue());
     ros::Subscriber forceSensorSubscriber = ros_node->subscribe(forceSensorSubOption);
+
+    // Setup subscriber to joy ps4 controller
+    ros::SubscribeOptions joystickSubOption = ros::SubscribeOptions::create<sensor_msgs::Joy>(
+        "/joy", 1, JoystickFeedback, ros::VoidPtr(), ros_node->getCallbackQueue());
+    ros::Subscriber joystickSubscriber = ros_node->subscribe(joystickSubOption);
+
+    // Setup apply body wrench service client
+    wrench_client = ros_node->serviceClient<gazebo_msgs::ApplyBodyWrench>("/gazebo/apply_body_wrench");
 
     // Declare kdl stuff
     KDL::Tree 	kdl_tree_;

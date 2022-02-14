@@ -122,10 +122,10 @@ int main( int argc, char** argv )
 
 
     //marker_pub.publish(points);
-    //marker_pub.publish(line_strip);
-    //marker_pub.publish(line_list);
-    marker_pub.publish(plane);
-
+    marker_pub.publish(line_strip);
+    //marker_pub.publish(line_list); // We don't use line list. Not sure why we even have this
+    //marker_pub.publish(plane);
+  
     r.sleep();
 
     f += 0.04;

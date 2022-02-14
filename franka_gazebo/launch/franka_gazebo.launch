@@ -13,6 +13,12 @@
   
   <!-- Run a python script to send tf for fixed joint to rviz-->
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen"/>
+
+  <!-- joy node -->
+  <node respawn="true" pkg="joy" type="joy_node" name="joy_node" >
+    <param name="dev" type="string" value="/dev/input/js0" />
+    <param name="deadzone" value="0.12" />
+  </node>
   
   <!-- Run controller utils -->
   <include file="$(find franka_gazebo)/launch/controller_utils.launch"/>
