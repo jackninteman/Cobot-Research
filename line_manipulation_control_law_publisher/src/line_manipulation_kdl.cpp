@@ -68,6 +68,7 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
     ext_force_joystick[1] = 0; // force along y-axis is always zero for now
     ext_force_joystick[2] = joystickhandlePtr_->axes[1]; // force along z-axis
     bool buttonX = joystickhandlePtr_->buttons[0]; // x button
+    bool buttonR2 = joystickhandlePtr_->buttons[7]; // R2 button
 
 
     double max_force = 20;
@@ -80,11 +81,17 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
     apply_wrench_req.duration = (ros::Duration)(-1);
     wrench_client.call(apply_wrench_req, apply_wrench_resp);
 
-    if (buttonX){
+    if (buttonR2 && buttonX){
+        std_msgs::Float64 msg;
+        msg.data = 100;
+        joint4_torque_pub_.publish(msg);
+    }
+    else if (buttonX){
         std_msgs::Float64 msg;
         msg.data = -100;
         joint4_torque_pub_.publish(msg);
     }
+
    
     
 }
