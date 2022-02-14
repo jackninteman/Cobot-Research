@@ -6,7 +6,7 @@ We are planning to extend this work for Ubuntu 18.04 and ROS Melodic.
 Install the following packages before clonning this repo.
 ```
 sudo apt update
-sudo apt install ros-melodic-effort-controllers ros-melodic-joint-state-controller ros-melodic-kdl-parser libeigen3-dev 
+sudo apt install ros-melodic-effort-controllers ros-melodic-joint-state-controller ros-melodic-kdl-parser libeigen3-dev ros-melodic-joy
 ```
 ## Build Instructions
 
