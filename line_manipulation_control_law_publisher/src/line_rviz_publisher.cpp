@@ -53,7 +53,7 @@ int main( int argc, char** argv )
     // PLANE
     plane.scale.x = 5;
     plane.scale.y = 5;
-    plane.scale.z = 0;
+    plane.scale.z = 0.001;
 
 
 
@@ -71,6 +71,7 @@ int main( int argc, char** argv )
     line_list.color.a = 1.0;
 
     // Plane is cyan
+    plane.color.r = 0.0;
     plane.color.g = 1.0;
     plane.color.b = 1.0;
     plane.color.a = 0.8;
@@ -124,7 +125,7 @@ int main( int argc, char** argv )
     //marker_pub.publish(points);
     marker_pub.publish(line_strip);
     //marker_pub.publish(line_list); // We don't use line list. Not sure why we even have this
-    //marker_pub.publish(plane);
+    // marker_pub.publish(plane);
   
     r.sleep();
 

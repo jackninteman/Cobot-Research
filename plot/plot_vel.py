@@ -2,7 +2,7 @@ import rosbag
 import matplotlib.pyplot as plt
 plt.get_backend()
 
-bag = rosbag.Bag('../../../vel4.bag')
+bag = rosbag.Bag('../../../2022-02-13-18-25-13.bag')
 
 # Initialize some empty lists for storing the data
 tt = []

@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   kdl_parser
   message_filters
+  space_manipulation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -131,9 +132,10 @@ include_directories(include ${catkin_INCLUDE_DIRS})
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(line_manipulation_kdl_node src/line_manipulation_kdl.cpp src/line3d.cpp src/circle3d.cpp src/plane3d.cpp)
+add_executable(line_manipulation_kdl_node src/line_manipulation_kdl.cpp)
 add_executable(kdl_test_node src/kdl_test.cpp)
 add_executable(line_rviz_publisher_node src/line_rviz_publisher.cpp)
+# add_library({PROJECT_NAME} src/line3d.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -149,6 +151,7 @@ add_executable(line_rviz_publisher_node src/line_rviz_publisher.cpp)
 target_link_libraries(line_manipulation_kdl_node ${catkin_LIBRARIES})
 target_link_libraries(kdl_test_node ${catkin_LIBRARIES})
 target_link_libraries(line_rviz_publisher_node ${catkin_LIBRARIES})
+# target_link_libraries({PROJECT_NAME} ${catkin_LIBRARIES})
 #############
 ## Install ##
 #############
@@ -177,6 +180,12 @@ target_link_libraries(line_rviz_publisher_node ${catkin_LIBRARIES})
 #   RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
 # )
 
+## Mark cpp header files for installation
+# install(DIRECTORY include/${PROJECT_NAME}/
+#   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+#   FILES_MATCHING PATTERN "*.h"
+#   PATTERN ".svn" EXCLUDE
+# )
 ## Mark cpp header files for installation
 # install(DIRECTORY include/${PROJECT_NAME}/
 #   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
