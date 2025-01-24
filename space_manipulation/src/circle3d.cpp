@@ -1,4 +1,4 @@
-#include "circle3d.h"
+#include "space_manipulation/circle3d.h"
 
 Circle3d::Circle3d(Eigen::Vector3d p_initial, Eigen::Vector3d p_final_approx, Eigen::Vector3d p_center)
 {
