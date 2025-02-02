@@ -1,8 +1,17 @@
+//------------------------------------------------------------------------------
+// INCLUDES
+//------------------------------------------------------------------------------
+
+#include "cobot.h"
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
 #include <Eigen/Dense>
 
 #include <cmath>
+
+//------------------------------------------------------------------------------
+// DEFINES
+//------------------------------------------------------------------------------
 
 // ------ Need to clean up this code. This is just to show a straight line or circle on rviz------
 int main( int argc, char** argv )
@@ -123,9 +132,13 @@ int main( int argc, char** argv )
 
 
     //marker_pub.publish(points);
+#ifdef LINE
     marker_pub.publish(line_strip);
+#endif
     //marker_pub.publish(line_list); // We don't use line list. Not sure why we even have this
-    // marker_pub.publish(plane);
+#ifdef PLANE
+    marker_pub.publish(plane);
+#endif
   
     r.sleep();
 

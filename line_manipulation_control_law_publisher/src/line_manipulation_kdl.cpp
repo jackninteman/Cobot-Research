@@ -1,3 +1,8 @@
+//------------------------------------------------------------------------------
+// INCLUDES
+//------------------------------------------------------------------------------
+
+#include "cobot.h"
 #include <std_msgs/Float64.h>
 #include <sensor_msgs/JointState.h>
 #include <sensor_msgs/Joy.h>
@@ -23,6 +28,14 @@
 #include "pseudo_inversion.h"
 #include <ros/ros.h>
 #include <gazebo_msgs/ApplyBodyWrench.h>
+
+//------------------------------------------------------------------------------
+// DEFINES
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// VARIABLES
+//------------------------------------------------------------------------------
 
 // Global variable declaration
 ros::Publisher joint1_torque_pub_;
@@ -53,16 +66,24 @@ KDL::Frame ee_tf_;
 KDL::Frame force_frame_tf_;
 Eigen::Vector3d ext_force_body;
 Eigen::Vector3d ext_force_joystick;
-// 1) Set up line vs plane here to specify which line or plane you want to follow
-// Eigen::Vector3d p_initial(0.25,0.4,0.2);         // Line + Plane
-Eigen::Vector3d p_initial(0.25,0.4,0.2);         // Line + Plane
-Eigen::Vector3d p_final(0.3,0.4,0.1);         // Line  
+
+Eigen::Vector3d p_initial(0.25,0.4,0.2);
+Eigen::Vector3d p_final(0.3,0.4,0.1);
+#ifdef CIRCLE
 Eigen::Vector3d p_center(0.0,0.0,0.5);
-Eigen::Vector3d p_2(0.5,0.4,0.6);             // Plane
-Eigen::Vector3d p_3(0,0.4,0.7);             // Plane
+#endif
+#ifdef PLANE
+Eigen::Vector3d p_2(0.5,0.4,0.6);
+Eigen::Vector3d p_3(0,0.4,0.7);
+#endif
+
 bool start_flag = true;
 double time_begin_in_sec;
 Eigen::Vector3d begin_cartesian_position;
+
+//------------------------------------------------------------------------------
+// FUNCTIONS
+//------------------------------------------------------------------------------
 
 void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
 {
@@ -172,34 +193,47 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // 2) Choose line or plane objects
     // -----------Line/Circle Parameters----------------------------------------------------------
+#ifdef LINE
     // Setup line parameter
     Line3d line(p_initial, p_final);
     double distance_param;
-
+#endif
+#ifdef CIRCLE
     // Setup circle parameter
-    //Circle3d circle(p_initial, p_final, p_center);
-    //double theta_param;
-
+    Circle3d circle(p_initial, p_final, p_center);
+    double theta_param;
+#endif
+#ifdef PLANE
     // Setup plane parameter
-    // Plane3d plane(p_initial, p_2, p_3);
-    // double distance_param_x, distance_param_y;
+    Plane3d plane(p_initial, p_2, p_3);
+    double distance_param_x, distance_param_y;
+#endif
 
     // ----------EE Pos: Set Desired and get current ee position and orientation-------------------
     // 3) Call line or plane (or nothing) object methods
+#ifdef LINE
     Eigen::Vector3d desired_position(line.GetDesiredCrosstrackLocation(ee_translation,distance_param));
-    // Eigen::Vector3d desired_position(circle.GetDesiredCrosstrackLocation(ee_translation,theta_param));
-    // Eigen::Vector3d desired_position(plane.GetDesiredCrosstrackLocation(ee_translation,distance_param_x, distance_param_y));
+#endif
+#ifdef CIRCLE
+    Eigen::Vector3d desired_position(circle.GetDesiredCrosstrackLocation(ee_translation,theta_param));
+#endif
+#ifdef PLANE
+    Eigen::Vector3d desired_position(plane.GetDesiredCrosstrackLocation(ee_translation,distance_param_x, distance_param_y));
+#endif
+#if !defined(LINE) && !defined(CIRCLE) && !defined(PLANE)
     // This if-else is for nothing case
-    // Eigen::Vector3d desired_position;
-    // Eigen::Vector3d desired_traj(-0.0001*(time_in_sec-10), 0, 0);
-    // if (time_in_sec < 10){
-    //     Eigen::Vector3d x_offset(0.6,0,0);
-    //     desired_position = p_initial + x_offset;
-    // }
-    // else {
-    //     // desired_position = ee_translation; // Free to move in space
-    //     desired_position = desired_position + desired_traj; // Free to move in space
-    // }
+    Eigen::Vector3d desired_position;
+    Eigen::Vector3d desired_traj(-0.0001*(time_in_sec-10), 0, 0);
+    if (time_in_sec < 10){
+        Eigen::Vector3d x_offset(0.6,0,0);
+        desired_position = p_initial + x_offset;
+    }
+    else {
+        // desired_position = ee_translation; // Free to move in space
+        desired_position = desired_position + desired_traj; // Free to move in space
+    }
+#endif
+    
     Eigen::Vector3d current_position(ee_translation);
     Eigen::Quaterniond desired_orientation(0.0, 1.0, 0.0, 0.0); //(w,x,y,z) is the order shown here
     Eigen::Quaterniond current_orientation(ee_linear);
@@ -225,9 +259,15 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // -----------Compute instantaneous frenet frame and rotation matrix------------------------------
     // 4) Call line or plane (or nothing) get unit direction methods
+#ifdef LINE
     Eigen::Vector3d e_t(line.GetLineUnitDirection());
-    // Eigen::Vector3d e_t(circle.GetUnitDirection(theta_param));
-    // Eigen::Vector3d e_t((plane.GetPlaneUnitDirection()).col(0));
+#endif
+#ifdef CIRCLE
+    Eigen::Vector3d e_t(circle.GetUnitDirection(theta_param));
+#endif
+#ifdef PLANE
+    Eigen::Vector3d e_t((plane.GetPlaneUnitDirection()).col(0));
+#endif
     Eigen::Vector3d e_n(0,0,1);
     if (error.head(3).norm() != 0) {
         e_n = -error.head(3)/error.head(3).norm();
@@ -257,12 +297,18 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double,6,6> K_des;
     K_des.setZero();
     K_des(0,0) = 0;
-    // For line, use parameter 1 and 2, for plane, only use 2
-    K_des(1,1) = 100;
-    K_des(2,2) = 100;
-    // K_des(0,0) = 0;
-    // K_des(1,1) = 0;
-    // K_des(2,2) = 0;
+#ifdef LINE    
+    K_des(1,1) = 500;
+    K_des(2,2) = 500;
+#endif
+#ifdef CIRCLE
+    K_des(1,1) = 500;
+    K_des(2,2) = 500;
+#endif
+#ifdef PLANE
+    K_des(1,1) = 0;
+    K_des(2,2) = 500;
+#endif
     K_des(3,3) = 30;
     K_des(4,4) = 30;
     K_des(5,5) = 30;
@@ -524,12 +570,14 @@ int main(int argc, char **argv)
     ros_node->setParam("/p_final_x",p_final[0]);
     ros_node->setParam("/p_final_y",p_final[1]);
     ros_node->setParam("/p_final_z",p_final[2]);
+#ifdef PLANE
     Plane3d plane(p_initial, p_2, p_3);
     Eigen::Quaterniond plane_orientation(plane.GetPlaneUnitDirection());
     ros_node->setParam("/plane_orientation_w", plane_orientation.w());
     ros_node->setParam("/plane_orientation_x", plane_orientation.x());
     ros_node->setParam("/plane_orientation_y", plane_orientation.y());
     ros_node->setParam("/plane_orientation_z", plane_orientation.z());
+#endif
 
     
     // Setup subscriber to joint state controller
