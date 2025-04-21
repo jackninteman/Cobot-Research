@@ -4,10 +4,11 @@
 import rosbag
 import matplotlib.pyplot as plt
 import numpy as np
+import math
 plt.rcParams.update({'font.size': 25})
 plt.get_backend()
 
-bag = rosbag.Bag('../../../2023-02-04-16-11-15.bag')
+bag = rosbag.Bag('/home/rsl/catkin_ws/continuous_limiting.bag')
 
 # Initialize some empty lists for storing the data
 tt = []
@@ -21,34 +22,64 @@ z_traj = []
 
 for topic,msg,t in bag.read_messages(topics=['/pose']):
     tt.append(t.to_sec())
+    ttz = [tt_ - tt[0] for tt_ in tt]
     x.append(msg.position.x)
     y.append(msg.position.y)
     z.append(msg.position.z)
 for topic2,msg2,t2 in bag.read_messages(topics=['/traj']):
     tt_traj.append(t2.to_sec())
+    tt_trajz = [tt_traj_ - tt_traj[0] for tt_traj_ in tt_traj]
     x_traj.append(msg2.x)
     y_traj.append(msg2.y)
     z_traj.append(msg2.z)
 bag.close()
-#print tt
-plt.figure()
-plt.plot(tt, x, linewidth=5, label='x actual')
-plt.plot(tt, y, linewidth=5, label='y actual')
-plt.plot(tt, z, linewidth=5, label='z actual')
-# plt.plot(tt, [0.0]*len(tt), '--', label='y_des', linewidth=3)
-# plt.plot(tt, [0.0]*len(tt), '--', linewidth=3)
-# plt.plot(tt, [0.4]*len(tt), '--', linewidth=3)
-plt.plot(tt_traj,x_traj, '--', linewidth=2, label='x trajectory')
-plt.plot(tt_traj,y_traj, '--', linewidth=2, label='y trajectory')
-plt.plot(tt_traj,z_traj, '--', linewidth=2, label='z trajectory')
-# plt.legend(bbox_to_anchor=(0.6, 0.6), loc='upper left', borderaxespad=0)
-# plt.legend()
-plt.title('End Effector Trajectory Control')
+
+tmin = 1
+tmax = 15
+
+plt.figure(1)
+plt.plot(ttz, x, 'r', linewidth=5, label='x actual')
+plt.plot(tt_trajz, x_traj, 'b--', linewidth=2, label='x trajectory')
+plt.title('X Position Trajectory Control (error limit = 20mm, continuous movement)')
 plt.legend(loc='best', fontsize='x-small')
-plt.xlabel('time (seconds)')
+plt.xlabel('Time (seconds)')
 plt.ylabel('Position (meters)')
-plt.yticks(np.arange(-0.75, 1, step=0.25))
-# plt.xlim([1656609745, 1656609770])
-plt.xlim([15, 35])
-# print(tt)
+ymin = min(min(x), min(x_traj)) - 0.03
+ymax = max(max(x), max(x_traj)) + 0.03
+plt.xticks(np.arange(math.floor(ttz[0]), math.ceil(ttz[-1]), step=1), fontsize='x-small')
+plt.yticks(np.arange(ymin, ymax, step=0.05), fontsize='x-small')
+plt.xlim(tmin, tmax)
+plt.ylim(ymin, ymax)
+plt.grid(1)
+
+plt.figure(2)
+plt.plot(ttz, y, 'r', linewidth=5, label='y actual')
+plt.plot(tt_trajz, y_traj, 'b--', linewidth=2, label='y trajectory')
+plt.title('Y Position Trajectory Control (error limit = 20mm, continuous movement)')
+plt.legend(loc='best', fontsize='x-small')
+plt.xlabel('Time (seconds)')
+plt.ylabel('Position (meters)')
+ymin = min(min(y), min(y_traj)) - 0.03
+ymax = max(max(y), max(y_traj)) + 0.03
+plt.xticks(np.arange(math.floor(ttz[0]), math.ceil(ttz[-1]), step=1), fontsize='x-small')
+plt.yticks(np.arange(ymin, ymax, step=0.05), fontsize='x-small')
+plt.xlim(tmin, tmax)
+plt.ylim(ymin, ymax)
+plt.grid(1)
+
+plt.figure(3)
+plt.plot(ttz, z, 'r', linewidth=5, label='z actual')
+plt.plot(tt_trajz, z_traj, 'b--', linewidth=2, label='z trajectory')
+plt.title('Z Position Trajectory Control (error limit = 20mm, continuous movement)')
+plt.legend(loc='best', fontsize='x-small')
+plt.xlabel('Time (seconds)')
+plt.ylabel('Position (meters)')
+ymin = min(min(z), min(z_traj)) - 0.03
+ymax = max(max(z), max(z_traj)) + 0.03
+plt.xticks(np.arange(math.floor(ttz[0]), math.ceil(ttz[-1]), step=1), fontsize='x-small')
+plt.yticks(np.arange(ymin, ymax, step=0.05), fontsize='x-small')
+plt.xlim(tmin, tmax)
+plt.ylim(ymin, ymax)
+plt.grid(1)
+
 plt.show()

@@ -78,11 +78,11 @@ int main(int argc, char **argv)
     ros::getGlobalCallbackQueue()->callAvailable(ros::WallDuration(0.1));
 
     visualization_msgs::Marker points,
-        line_strip, line_list, plane, delete_marker;
-    points.header.frame_id = line_strip.header.frame_id = line_list.header.frame_id = plane.header.frame_id = delete_marker.header.frame_id = "world";
-    points.header.stamp = line_strip.header.stamp = line_list.header.stamp = plane.header.stamp = delete_marker.header.stamp = ros::Time::now();
-    points.ns = line_strip.ns = line_list.ns = plane.ns = delete_marker.ns = "points_and_lines";
-    points.action = line_strip.action = line_list.action = plane.action = visualization_msgs::Marker::ADD;
+        line_strip, line_list, plane, delete_marker, mode_text;
+    points.header.frame_id = line_strip.header.frame_id = line_list.header.frame_id = plane.header.frame_id = delete_marker.header.frame_id = mode_text.header.frame_id = "world";
+    points.header.stamp = line_strip.header.stamp = line_list.header.stamp = plane.header.stamp = delete_marker.header.stamp = mode_text.header.stamp = ros::Time::now();
+    points.ns = line_strip.ns = line_list.ns = plane.ns = delete_marker.ns = mode_text.ns = "points_and_lines";
+    points.action = line_strip.action = line_list.action = plane.action = mode_text.action = visualization_msgs::Marker::ADD;
     delete_marker.action = visualization_msgs::Marker::DELETE;
     points.pose.orientation.w = line_strip.pose.orientation.w = line_list.pose.orientation.w = 1.0;
 
@@ -90,11 +90,29 @@ int main(int argc, char **argv)
     line_strip.id = 1;
     line_list.id = 2;
     plane.id = 3;
+    mode_text.id = 4;
 
     points.type = visualization_msgs::Marker::POINTS;
     line_strip.type = visualization_msgs::Marker::LINE_STRIP;
     line_list.type = visualization_msgs::Marker::LINE_LIST;
     plane.type = visualization_msgs::Marker::CUBE;
+    mode_text.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+
+    // MODE TEXT
+    mode_text.pose.position.x = 0;
+    mode_text.pose.position.y = -0.5;
+    mode_text.pose.position.z = 0;
+
+    mode_text.pose.orientation.w = 1.0;
+
+    mode_text.scale.x = 0.1;
+    mode_text.scale.y = 0.1;
+    mode_text.scale.z = 0.1;
+
+    mode_text.color.r = 1.0;
+    mode_text.color.g = 0.0;
+    mode_text.color.b = 0.0;
+    mode_text.color.a = 1.0;
 
     // POINTS markers use x and y scale for width/height respectively
     points.scale.x = 0.2;
@@ -176,17 +194,24 @@ int main(int argc, char **argv)
     {
       if (hybrid_mode_list[LINE_MODE_IDX])
       {
-
+        delete_marker.id = 4;
+        marker_pub.publish(delete_marker);
         delete_marker.id = 3;
         marker_pub.publish(delete_marker);
 
+        mode_text.text = "LINE MODE";
+        marker_pub.publish(mode_text);
         marker_pub.publish(line_strip);
       }
       else if (hybrid_mode_list[PLANE_MODE_IDX])
       {
+        delete_marker.id = 4;
+        marker_pub.publish(delete_marker);
         delete_marker.id = 1;
         marker_pub.publish(delete_marker);
 
+        mode_text.text = "PLANE MODE";
+        marker_pub.publish(mode_text);
         marker_pub.publish(plane);
       }
     }

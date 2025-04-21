@@ -75,9 +75,9 @@ KDL::Frame force_frame_tf_;
 Eigen::Vector3d ext_force_body;
 Eigen::Vector3d ext_force_joystick;
 
-Eigen::Vector3d p_1(0.25, 0.4, 0.2);
-Eigen::Vector3d p_2(0.3, 0.4, 0.1);
-Eigen::Vector3d p_3(0, 0.4, 0.7);
+Eigen::Vector3d p_1(0.4, -0.25, 0.15);
+Eigen::Vector3d p_2(0.2, 0.25, 0.3);
+Eigen::Vector3d p_3(0.4, 0.0, 0.305);
 #ifdef CIRCLE
 Eigen::Vector3d p_center(0.0, 0.0, 0.5);
 #endif
@@ -88,6 +88,8 @@ Eigen::Vector3d begin_cartesian_position;
 
 std::vector<uint8_t> hybrid_mode_list = DEFAULT_MODE;
 
+std::vector<double> home_position = {0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785};
+
 //------------------------------------------------------------------------------
 // FUNCTIONS
 //------------------------------------------------------------------------------
@@ -95,7 +97,7 @@ std::vector<uint8_t> hybrid_mode_list = DEFAULT_MODE;
 void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
 {
     ext_force_joystick[0] = (joystickhandlePtr_->axes[0]) * (-1.0); // force along x-axis. Left analog controller going left/right
-    ext_force_joystick[1] = (joystickhandlePtr_->axes[3]) * (-1.0); // force along y-axis. Right analog controller going left/right
+    ext_force_joystick[1] = (joystickhandlePtr_->axes[2]) * (-1.0); // force along y-axis. Right analog controller going left/right
     ext_force_joystick[2] = joystickhandlePtr_->axes[1];            // force along z-axis. Left analog controller going up/down
     bool buttonX = joystickhandlePtr_->buttons[0];                  // X button
     bool buttonA = joystickhandlePtr_->buttons[1];                  // A button
@@ -107,7 +109,7 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
     apply_wrench_req.body_name = "franka::panda_link7";
     apply_wrench_req.reference_frame = "world";
     apply_wrench_req.wrench.force.x = ext_force_joystick[0] * max_force / 4;
-    apply_wrench_req.wrench.force.y = ext_force_joystick[1] * max_force;
+    apply_wrench_req.wrench.force.y = ext_force_joystick[1] * max_force / 4;
     apply_wrench_req.wrench.force.z = ext_force_joystick[2] * max_force / 4;
     // apply_wrench_req.start_time = 0;
     apply_wrench_req.duration = (ros::Duration)(-1);
@@ -270,6 +272,22 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // ----------EE Pos: Compute position and orientation error--------------------------------------
     Eigen::Matrix<double, 6, 1> error;
+    // Apply a filter to the error to avoid violent movements
+    for (int i = 0; i < 3; i++)
+    {
+        float error_thresh = 0.02;
+
+        if (desired_position[i] - current_position[i] > error_thresh)
+        {
+            desired_position[i] = current_position[i] + error_thresh;
+        }
+        else if (desired_position[i] - current_position[i] < -error_thresh)
+        {
+            desired_position[i] = current_position[i] - error_thresh;
+        }
+
+        // std::cout << error.head(3)[i] << std::endl;
+    }
     error.head(3) << desired_position - current_position;
     if (desired_orientation.coeffs().dot(current_orientation.coeffs()) < 0.0)
     {
@@ -326,18 +344,24 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // -----------Specify cartesian stiffness------------------------------------------------------
     Eigen::Matrix<double, 6, 6> K_des;
+    Eigen::Matrix<double, 6, 6> K_switch;
+
     K_des.setZero();
-    K_des(0, 0) = 0;
-#ifdef CIRCLE
+    K_des(0, 0) = 500;
     K_des(1, 1) = 500;
-#endif
-#ifdef HYBRID
-    K_des(1, 1) = hybrid_mode_list[LINE_MODE_IDX] * 500;
-#endif
     K_des(2, 2) = 500;
     K_des(3, 3) = 30;
     K_des(4, 4) = 30;
     K_des(5, 5) = 30;
+
+    K_switch.setIdentity();
+#ifdef CIRCLE
+    K_switch(0, 0) = 0;
+#endif
+#ifdef HYBRID
+    K_switch(0, 0) = 0;
+    K_switch(1, 1) = hybrid_mode_list[LINE_MODE_IDX];
+#endif
 
     // -----------Compute pseudoinverse for Jacobian transpose-------------------------------------
     Eigen::MatrixXd Jacobian_pseudoInverse_transpose;
@@ -356,7 +380,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     tau_null = (identity_7by7 - J_.data.transpose() * Jacobian_pseudoInverse_transpose) * null_error * 300.0; // if the gain is too high the whole thing can vibrate within the null space
 
     // -----------Compute K_bar (Positive definite K matrix normalized by mass matrix before diagonalized)
-    Eigen::Matrix<double, 6, 6> K_bar(L_inverse * R * K_des * R.transpose() * L_inverse.transpose());
+    Eigen::Matrix<double, 6, 6> K_bar(L_inverse * R * K_switch * K_des * R.transpose() * L_inverse.transpose());
     // std::cout << "K_bar: " << std::endl << K_bar << std::endl;
 
     // -----------Compute eigenvalue and eigenvector of K_bar-------------------------------------------
@@ -480,7 +504,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     // }
     else
     {
-        tau_d = J_.data.transpose() * (R * K_des * R.transpose() * error + R * C_des * R.transpose() * (-J_.data * q_dot_.data)) + G_.data + C_.data;
+        tau_d = J_.data.transpose() * (R * K_switch * K_des * R.transpose() * error + R * C_des * R.transpose() * (-J_.data * q_dot_.data)) + G_.data + C_.data;
         std::cout << "Cross track only" << std::endl;
     }
 
