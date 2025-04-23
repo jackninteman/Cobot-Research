@@ -13,6 +13,7 @@
 #include "cobot.h"
 #include <std_msgs/Float64.h>
 #include "std_msgs/UInt8MultiArray.h"
+#include "std_msgs/Float64MultiArray.h"
 #include <sensor_msgs/JointState.h>
 #include <sensor_msgs/Joy.h>
 #include <geometry_msgs/Pose.h>
@@ -56,6 +57,7 @@ ros::Publisher pose_pub_;
 ros::Publisher traj_pub_;
 ros::Publisher twist_pub_;
 ros::Publisher hybrid_mode_pub_;
+ros::Publisher matrix_pub;
 ros::ServiceClient wrench_client;
 gazebo_msgs::ApplyBodyWrench::Request apply_wrench_req;
 gazebo_msgs::ApplyBodyWrench::Response apply_wrench_resp;
@@ -75,24 +77,54 @@ KDL::Frame force_frame_tf_;
 Eigen::Vector3d ext_force_body;
 Eigen::Vector3d ext_force_joystick;
 
+// Points for line and plane
 Eigen::Vector3d p_1(0.4, -0.25, 0.15);
 Eigen::Vector3d p_2(0.2, 0.25, 0.3);
 Eigen::Vector3d p_3(0.4, 0.0, 0.305);
-#ifdef CIRCLE
-Eigen::Vector3d p_center(0.0, 0.0, 0.5);
-#endif
+// Points for circle
+Eigen::Vector3d p_c1(0.38, 0.25, 0.5);
+Eigen::Vector3d p_c2(0.35, 0.0, 0.75);
+Eigen::Vector3d p_cc(0.4, 0.0, 0.5);
 
 bool start_flag = true;
 double time_begin_in_sec;
 Eigen::Vector3d begin_cartesian_position;
 
 std::vector<uint8_t> hybrid_mode_list = DEFAULT_MODE;
+int desired_mode_idx = 0;
 
 std::vector<double> home_position = {0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785};
 
 //------------------------------------------------------------------------------
 // FUNCTIONS
 //------------------------------------------------------------------------------
+
+/// Function to convert Eigen matrix to Float64MultiArray and publish
+void publishMatrices(const Eigen::MatrixXd &S, const Eigen::MatrixXd &L)
+{
+    std_msgs::Float64MultiArray msg;
+
+    // Flatten the first matrix (S) into the message
+    for (int i = 0; i < S.rows(); ++i)
+    {
+        for (int j = 0; j < S.cols(); ++j)
+        {
+            msg.data.push_back(S(i, j)); // Add matrix element to the message
+        }
+    }
+
+    // Flatten the second matrix (L) into the message
+    for (int i = 0; i < L.rows(); ++i)
+    {
+        for (int j = 0; j < L.cols(); ++j)
+        {
+            msg.data.push_back(L(i, j)); // Add matrix element to the message
+        }
+    }
+
+    // Publish the message
+    matrix_pub.publish(msg);
+}
 
 void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
 {
@@ -129,16 +161,30 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
         joint4_torque_pub_.publish(msg);
     }
 
-    // Hand hybrid mode switching
+    // Handle hybrid mode switching
     if (buttonA)
     {
-        hybrid_mode_list[LINE_MODE_IDX] = 1;
-        hybrid_mode_list[PLANE_MODE_IDX] = 0;
+        desired_mode_idx = 0;
     }
     else if (buttonB)
     {
-        hybrid_mode_list[LINE_MODE_IDX] = 0;
-        hybrid_mode_list[PLANE_MODE_IDX] = 1;
+        desired_mode_idx = 1;
+    }
+    else if (buttonY)
+    {
+        desired_mode_idx = 2;
+    }
+    // Update they hybrid mode list based on button inputs
+    for (int i = 0; i < NUM_MODES; i++)
+    {
+        if (i == desired_mode_idx)
+        {
+            hybrid_mode_list[i] = 1;
+        }
+        else
+        {
+            hybrid_mode_list[i] = 0;
+        }
     }
 
     // Always publish the current hybrid mode
@@ -220,25 +266,19 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // 2) Choose line or plane objects
     // -----------Line/Circle Parameters----------------------------------------------------------
-#ifdef CIRCLE
-    // Setup circle parameter
-    Circle3d circle(p_1, p_2, p_center);
-    double theta_param;
-#endif
 #ifdef HYBRID
-    // Setup both line and plane parameter
+    // Setup line, plane, and circle parameters
     Line3d line(p_1, p_2);
     double distance_param;
     Plane3d plane(p_1, p_2, p_3);
     double distance_param_x, distance_param_y;
+    Circle3d circle(p_c1, p_c2, p_cc);
+    double theta_param;
 #endif
 
     // ----------EE Pos: Set Desired and get current ee position and orientation-------------------
-    // 3) Call line or plane (or nothing) object methods
+    // 3) Call line, plane, or circle (or nothing) object methods
     Eigen::Vector3d desired_position;
-#ifdef CIRCLE
-    desired_position = circle.GetDesiredCrosstrackLocation(ee_translation, theta_param);
-#endif
 #ifdef HYBRID
     if (hybrid_mode_list[LINE_MODE_IDX])
     {
@@ -249,9 +289,13 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     {
         desired_position = plane.GetDesiredCrosstrackLocation(ee_translation, distance_param_x, distance_param_y);
     }
+    else if (hybrid_mode_list[CIRCLE_MODE_IDX])
+    {
+        desired_position = circle.GetDesiredCrosstrackLocation(ee_translation, theta_param);
+    }
 #endif
 
-#if !defined(CIRCLE) && !defined(HYBRID)
+#if !defined(HYBRID)
     // This if-else is for nothing case
     Eigen::Vector3d desired_traj(-0.0001 * (time_in_sec - 10), 0, 0);
     if (time_in_sec < 10)
@@ -285,8 +329,6 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
         {
             desired_position[i] = current_position[i] - error_thresh;
         }
-
-        // std::cout << error.head(3)[i] << std::endl;
     }
     error.head(3) << desired_position - current_position;
     if (desired_orientation.coeffs().dot(current_orientation.coeffs()) < 0.0)
@@ -303,11 +345,8 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     desired_velocity_frenet << 0.1, 0.0, 0.0, 0.0, 0.0, 0.0; // in order e_t,e_b,e_n,e_t,e_b,e_n
 
     // -----------Compute instantaneous frenet frame and rotation matrix------------------------------
-    // 4) Call line or plane (or nothing) get unit direction methods
+    // 4) Call line, plane, or circle (or nothing) get unit direction methods
     Eigen::Vector3d e_t;
-#ifdef CIRCLE
-    e_t = circle.GetUnitDirection(theta_param);
-#endif
 #ifdef HYBRID
     if (hybrid_mode_list[LINE_MODE_IDX])
     {
@@ -316,6 +355,10 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     else if (hybrid_mode_list[PLANE_MODE_IDX])
     {
         e_t = (plane.GetPlaneUnitDirection()).col(0);
+    }
+    else if (hybrid_mode_list[CIRCLE_MODE_IDX])
+    {
+        e_t = circle.GetUnitDirection(theta_param);
     }
 #endif
     Eigen::Vector3d e_n(0, 0, 1);
@@ -355,12 +398,10 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     K_des(5, 5) = 30;
 
     K_switch.setIdentity();
-#ifdef CIRCLE
-    K_switch(0, 0) = 0;
-#endif
 #ifdef HYBRID
     K_switch(0, 0) = 0;
-    K_switch(1, 1) = hybrid_mode_list[LINE_MODE_IDX];
+    // Only enable damping in the y-axis in line or circle modes
+    K_switch(1, 1) = hybrid_mode_list[LINE_MODE_IDX] | hybrid_mode_list[CIRCLE_MODE_IDX];
 #endif
 
     // -----------Compute pseudoinverse for Jacobian transpose-------------------------------------
@@ -455,6 +496,9 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     std::cout << S_new.col(3).dot(S_new.col(5)) << std::endl;
     std::cout << S_new.col(4).dot(S_new.col(5)) << std::endl;
     */
+
+    // publishing these matrices so they can be recorded to a .bag
+    publishMatrices(S, L);
 
     // ------------Compute desired damping matrix------------------------------------------------------------
     Eigen::Matrix<double, 6, 6> C_des(R.transpose() * L * S * EV * S.transpose() * L.transpose() * R);
@@ -592,6 +636,9 @@ int main(int argc, char **argv)
     // This node handle will be there as long as the main function keeps spinning
     std::unique_ptr<ros::NodeHandle> ros_node(new ros::NodeHandle);
 
+    // Initialize the publisher to publish on the "matrix_topic" topic
+    matrix_pub = ros_node->advertise<std_msgs::Float64MultiArray>("matrix_topic", 10);
+
     // Setup publisher to joint position action server
     // The real publishing happens in the call back function above
     // Note that this publisher is declared globally above so that we can use these variables in the
@@ -611,19 +658,32 @@ int main(int argc, char **argv)
 
     hybrid_mode_pub_ = ros_node->advertise<std_msgs::UInt8MultiArray>("/hybrid_mode", 1);
 
-    // Set rosparameter
+    // Set rosparameters for line
     ros_node->setParam("/p_initial_x", p_1[0]);
     ros_node->setParam("/p_initial_y", p_1[1]);
     ros_node->setParam("/p_initial_z", p_1[2]);
     ros_node->setParam("/p_final_x", p_2[0]);
     ros_node->setParam("/p_final_y", p_2[1]);
     ros_node->setParam("/p_final_z", p_2[2]);
+    // Set rosparameters for plane
     Plane3d plane(p_1, p_2, p_3);
     Eigen::Quaterniond plane_orientation(plane.GetPlaneUnitDirection());
     ros_node->setParam("/plane_orientation_w", plane_orientation.w());
     ros_node->setParam("/plane_orientation_x", plane_orientation.x());
     ros_node->setParam("/plane_orientation_y", plane_orientation.y());
     ros_node->setParam("/plane_orientation_z", plane_orientation.z());
+    // Set rosparameters for circle
+    ros_node->setParam("/p_center_x", p_cc[0]);
+    ros_node->setParam("/p_center_y", p_cc[1]);
+    ros_node->setParam("/p_center_z", p_cc[2]);
+    Circle3d circle(p_c1, p_c2, p_cc);
+    Eigen::MatrixXd R_circle = circle.GetRot();
+    // Must flatten the R matrix so it can be set as a rosparameter
+    std::vector<double> R_flat = {R_circle(0, 0), R_circle(0, 1), R_circle(0, 2),
+                                  R_circle(1, 0), R_circle(1, 1), R_circle(1, 2),
+                                  R_circle(2, 0), R_circle(2, 1), R_circle(2, 2)};
+    ros_node->setParam("/circle_rad", circle.GetRadius());
+    ros_node->setParam("/circle_rot", R_flat);
 
     // Setup subscriber to joint state controller
     // Whenever we receive actual joint states, we will use callback function above to publish desired joint states

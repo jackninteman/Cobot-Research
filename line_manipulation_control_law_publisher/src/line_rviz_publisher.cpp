@@ -59,6 +59,16 @@ private:
   std::vector<uint8_t> hybrid_mode_data; // Variable to store the received vector
 };
 
+// Helper function for forming the circle
+geometry_msgs::Point eigenToPoint(const Eigen::Vector3d &vec)
+{
+  geometry_msgs::Point p;
+  p.x = vec.x();
+  p.y = vec.y();
+  p.z = vec.z();
+  return p;
+}
+
 // ------ Need to clean up this code. This is just to show a straight line or circle on rviz------
 int main(int argc, char **argv)
 {
@@ -78,11 +88,11 @@ int main(int argc, char **argv)
     ros::getGlobalCallbackQueue()->callAvailable(ros::WallDuration(0.1));
 
     visualization_msgs::Marker points,
-        line_strip, line_list, plane, delete_marker, mode_text;
-    points.header.frame_id = line_strip.header.frame_id = line_list.header.frame_id = plane.header.frame_id = delete_marker.header.frame_id = mode_text.header.frame_id = "world";
-    points.header.stamp = line_strip.header.stamp = line_list.header.stamp = plane.header.stamp = delete_marker.header.stamp = mode_text.header.stamp = ros::Time::now();
-    points.ns = line_strip.ns = line_list.ns = plane.ns = delete_marker.ns = mode_text.ns = "points_and_lines";
-    points.action = line_strip.action = line_list.action = plane.action = mode_text.action = visualization_msgs::Marker::ADD;
+        line_strip, line_list, plane, delete_marker, mode_text, circle;
+    points.header.frame_id = line_strip.header.frame_id = line_list.header.frame_id = plane.header.frame_id = delete_marker.header.frame_id = mode_text.header.frame_id = circle.header.frame_id = "world";
+    points.header.stamp = line_strip.header.stamp = line_list.header.stamp = plane.header.stamp = delete_marker.header.stamp = mode_text.header.stamp = circle.header.stamp = ros::Time::now();
+    points.ns = line_strip.ns = line_list.ns = plane.ns = delete_marker.ns = mode_text.ns = circle.ns = "points_and_lines";
+    points.action = line_strip.action = line_list.action = plane.action = mode_text.action = circle.action = visualization_msgs::Marker::ADD;
     delete_marker.action = visualization_msgs::Marker::DELETE;
     points.pose.orientation.w = line_strip.pose.orientation.w = line_list.pose.orientation.w = 1.0;
 
@@ -91,12 +101,14 @@ int main(int argc, char **argv)
     line_list.id = 2;
     plane.id = 3;
     mode_text.id = 4;
+    circle.id = 5;
 
     points.type = visualization_msgs::Marker::POINTS;
     line_strip.type = visualization_msgs::Marker::LINE_STRIP;
     line_list.type = visualization_msgs::Marker::LINE_LIST;
     plane.type = visualization_msgs::Marker::CUBE;
     mode_text.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+    circle.type = visualization_msgs::Marker::LINE_STRIP;
 
     // MODE TEXT
     mode_text.pose.position.x = 0;
@@ -114,37 +126,49 @@ int main(int argc, char **argv)
     mode_text.color.b = 0.0;
     mode_text.color.a = 1.0;
 
-    // POINTS markers use x and y scale for width/height respectively
+    // POINTS properties (green)
     points.scale.x = 0.2;
     points.scale.y = 0.2;
 
-    // LINE_STRIP/LINE_LIST markers use only the x component of scale, for the line width
-    line_strip.scale.x = 0.01;
-    line_list.scale.x = 0.1;
-
-    // PLANE
-    plane.scale.x = 5;
-    plane.scale.y = 5;
-    plane.scale.z = 0.001;
-
-    // Points are green
     points.color.g = 1.0f;
     points.color.a = 1.0;
 
-    // Line strip is yellow
+    // LINE properties (yellow)
+    line_strip.scale.x = 0.01;
+
     line_strip.color.r = 1.0;
     line_strip.color.g = 1.0;
     line_strip.color.a = 1.0;
 
-    // Line list is red
-    line_list.color.r = 1.0;
-    line_list.color.a = 1.0;
+    // CIRCLE Properties (purple)
+    double radius;
+    std::vector<double> R_flat;
+    Eigen::Matrix<double, 3, 3> R_circle;
+    Eigen::Vector3d p_c;
+    int num_points = 100;
 
-    // Plane is cyan
+    circle.scale.x = 0.01;
+
+    circle.color.r = 0.63;
+    circle.color.g = 0.0;
+    circle.color.b = 1.0;
+    circle.color.a = 1.0;
+
+    // PLANE properties (cyan)
+    plane.scale.x = 5;
+    plane.scale.y = 5;
+    plane.scale.z = 0.001;
+
     plane.color.r = 0.0;
     plane.color.g = 1.0;
     plane.color.b = 1.0;
     plane.color.a = 0.8;
+
+    // LINE_LIST properties (not used)
+    line_list.scale.x = 0.1;
+
+    line_list.color.r = 1.0;
+    line_list.color.a = 1.0;
 
     Eigen::Vector3d p_1;
     Eigen::Vector3d p_2;
@@ -167,6 +191,19 @@ int main(int argc, char **argv)
     plane.pose.orientation.y = plane_orientation.y();
     plane.pose.orientation.z = plane_orientation.z();
     Eigen::Vector3d p_difference((p_2 - p_1) / (p_2 - p_1).norm());
+    n.getParam("p_center_x", p_c[0]);
+    n.getParam("p_center_y", p_c[1]);
+    n.getParam("p_center_z", p_c[2]);
+    n.getParam("circle_rad", radius);
+    n.getParam("circle_rot", R_flat);
+    if (R_flat.size() == 9)
+    {
+      R_circle = Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(R_flat.data());
+    }
+    else
+    {
+      R_circle = Eigen::Matrix3d::Identity(); // fallback
+    }
     // Create the vertices for the points and lines
     for (int i = -3; i <= 3; ++i)
     {
@@ -186,6 +223,19 @@ int main(int argc, char **argv)
       p.z += 1.0;
       line_list.points.push_back(p);
     }
+    // Generate circle points and transform them
+    for (int i = 0; i < num_points + 1; i++)
+    {
+      double theta = 2 * M_PI * i / num_points;
+      Eigen::Vector3d local_point;
+      local_point.x() = radius * cos(theta);
+      local_point.y() = radius * sin(theta);
+      local_point.z() = 0.0;
+
+      // Rotate and translate the circle points
+      Eigen::Vector3d global_point = R_circle * local_point + p_c;
+      circle.points.push_back(eigenToPoint(global_point));
+    }
 
 #ifdef HYBRID
     const std::vector<uint8_t> &hybrid_mode_list = hybrid_subscriber.getReceivedVector();
@@ -194,9 +244,12 @@ int main(int argc, char **argv)
     {
       if (hybrid_mode_list[LINE_MODE_IDX])
       {
+        // delete all pre-existing shapes/text
+        delete_marker.id = 3;
+        marker_pub.publish(delete_marker);
         delete_marker.id = 4;
         marker_pub.publish(delete_marker);
-        delete_marker.id = 3;
+        delete_marker.id = 5;
         marker_pub.publish(delete_marker);
 
         mode_text.text = "LINE MODE";
@@ -205,14 +258,31 @@ int main(int argc, char **argv)
       }
       else if (hybrid_mode_list[PLANE_MODE_IDX])
       {
+        // delete all pre-existing shapes/text
+        delete_marker.id = 1;
+        marker_pub.publish(delete_marker);
         delete_marker.id = 4;
         marker_pub.publish(delete_marker);
-        delete_marker.id = 1;
+        delete_marker.id = 5;
         marker_pub.publish(delete_marker);
 
         mode_text.text = "PLANE MODE";
         marker_pub.publish(mode_text);
         marker_pub.publish(plane);
+      }
+      else if (hybrid_mode_list[CIRCLE_MODE_IDX])
+      {
+        // delete all pre-existing shapes/text
+        delete_marker.id = 1;
+        marker_pub.publish(delete_marker);
+        delete_marker.id = 3;
+        marker_pub.publish(delete_marker);
+        delete_marker.id = 4;
+        marker_pub.publish(delete_marker);
+
+        mode_text.text = "CIRCLE MODE";
+        marker_pub.publish(mode_text);
+        marker_pub.publish(circle);
       }
     }
     else

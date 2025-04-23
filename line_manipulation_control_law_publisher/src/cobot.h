@@ -16,12 +16,13 @@
 
 #define HYBRID
 
-#define NUM_MODES (2)
+#define NUM_MODES (3)
 
 #define LINE_MODE_IDX (0)
 #define PLANE_MODE_IDX (1)
+#define CIRCLE_MODE_IDX (2)
 
-#define DEFAULT_MODE std::vector<uint8_t>({1, 0})
+#define DEFAULT_MODE std::vector<uint8_t>({1, 0, 0})
 
 //------------------------------------------------------------------------------
 // VARIABLES
