@@ -14,6 +14,7 @@
 #include "std_msgs/UInt8MultiArray.h"
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
+#include <geometry_msgs/Point.h>
 #include <Eigen/Dense>
 #include <ros/callback_queue.h>
 
@@ -59,6 +60,34 @@ private:
   std::vector<uint8_t> hybrid_mode_data; // Variable to store the received vector
 };
 
+class SplineSubcriber
+{
+public:
+  SplineSubcriber(ros::NodeHandle &nh)
+  {
+    marker_sub_ = nh.subscribe("/spline", 1, &SplineSubcriber::markerCallback, this);
+  }
+
+  // Getter for full marker
+  visualization_msgs::Marker getSplineMarker() const
+  {
+    return spline_marker_;
+  }
+
+private:
+  ros::Subscriber marker_sub_;
+
+  visualization_msgs::Marker spline_marker_;
+
+  void markerCallback(const visualization_msgs::Marker::ConstPtr &msg)
+  {
+    spline_marker_ = *msg; // Deep copy of full marker
+
+    //   ROS_INFO("Received marker with %lu points, ID = %d",
+    //            msg->points.size(), msg->id);
+  }
+};
+
 // Helper function for forming the circle
 geometry_msgs::Point eigenToPoint(const Eigen::Vector3d &vec)
 {
@@ -79,6 +108,9 @@ int main(int argc, char **argv)
   // Initialize the subscriber node to recieve hybrid mode status
   HybridSubscriber hybrid_subscriber(n);
 
+  // Initialize the subscriber node to recieve spline info
+  SplineSubcriber spline_subscriber(n);
+
   ros::Rate r(30);
 
   float f = 0.0;
@@ -89,6 +121,7 @@ int main(int argc, char **argv)
 
     visualization_msgs::Marker points,
         line_strip, line_list, plane, delete_marker, mode_text, circle;
+    visualization_msgs::Marker spline = spline_subscriber.getSplineMarker();
     points.header.frame_id = line_strip.header.frame_id = line_list.header.frame_id = plane.header.frame_id = delete_marker.header.frame_id = mode_text.header.frame_id = circle.header.frame_id = "world";
     points.header.stamp = line_strip.header.stamp = line_list.header.stamp = plane.header.stamp = delete_marker.header.stamp = mode_text.header.stamp = circle.header.stamp = ros::Time::now();
     points.ns = line_strip.ns = line_list.ns = plane.ns = delete_marker.ns = mode_text.ns = circle.ns = "points_and_lines";
@@ -102,6 +135,7 @@ int main(int argc, char **argv)
     plane.id = 3;
     mode_text.id = 4;
     circle.id = 5;
+    spline.id = 6;
 
     points.type = visualization_msgs::Marker::POINTS;
     line_strip.type = visualization_msgs::Marker::LINE_STRIP;
@@ -251,6 +285,8 @@ int main(int argc, char **argv)
         marker_pub.publish(delete_marker);
         delete_marker.id = 5;
         marker_pub.publish(delete_marker);
+        delete_marker.id = 6;
+        marker_pub.publish(delete_marker);
 
         mode_text.text = "LINE MODE";
         marker_pub.publish(mode_text);
@@ -264,6 +300,8 @@ int main(int argc, char **argv)
         delete_marker.id = 4;
         marker_pub.publish(delete_marker);
         delete_marker.id = 5;
+        marker_pub.publish(delete_marker);
+        delete_marker.id = 6;
         marker_pub.publish(delete_marker);
 
         mode_text.text = "PLANE MODE";
@@ -279,10 +317,28 @@ int main(int argc, char **argv)
         marker_pub.publish(delete_marker);
         delete_marker.id = 4;
         marker_pub.publish(delete_marker);
+        delete_marker.id = 6;
+        marker_pub.publish(delete_marker);
 
         mode_text.text = "CIRCLE MODE";
         marker_pub.publish(mode_text);
         marker_pub.publish(circle);
+      }
+      else if (hybrid_mode_list[SPLINE_MODE_IDX])
+      {
+        // delete all pre-existing shapes/text
+        delete_marker.id = 1;
+        marker_pub.publish(delete_marker);
+        delete_marker.id = 3;
+        marker_pub.publish(delete_marker);
+        delete_marker.id = 4;
+        marker_pub.publish(delete_marker);
+        delete_marker.id = 5;
+        marker_pub.publish(delete_marker);
+
+        mode_text.text = "SPLINE MODE";
+        marker_pub.publish(mode_text);
+        marker_pub.publish(spline);
       }
     }
     else

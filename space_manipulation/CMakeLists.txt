@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(space_manipulation)
+
+set(CMAKE_CXX_STANDARD 17)
+
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
@@ -20,6 +23,7 @@ add_library(${PROJECT_NAME}
   src/line3d.cpp
   src/circle3d.cpp
   src/plane3d.cpp
+  src/spline3d.cpp
 )
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
 install(
