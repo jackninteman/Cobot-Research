@@ -17,25 +17,21 @@ Spline3d::Spline3d(Eigen::Vector3d p_1, Eigen::Vector3d p_2, Eigen::Vector3d p_3
         points.col(i) = sample_points[i];
     }
 
-    std::cout << "Points matrix:\n"
-              << points << std::endl;
-
     spline = Eigen::SplineFitting<Eigen::Spline<double, 3>>::Interpolate(points, 3);
 }
 
-Eigen::Vector3d Spline3d::GetDesiredCrosstrackLocation(Eigen::Vector3d current_position)
+void Spline3d::FindDesiredSplinePoint(Eigen::Vector3d current_position)
 {
     Eigen::Vector3d p = current_position;
 
     double min_dist = std::numeric_limits<double>::max();
     double bestT = 0.0;
-    Eigen::Vector3d bestSplinePoint;
-    Eigen::Vector3d bestTangent;
+    Eigen::Vector3d s;
 
     for (double t = 0; t <= 1; t += 0.001)
     {
-        Eigen::Vector3d s = spline(t);
-        tangent = spline.derivatives(t, 1).col(1);
+        s = spline(t);
+        // tangent = spline.derivatives(t, 1).col(1);
 
         double dist = sqrt(pow(p.x() - s.x(), 2) + pow(p.y() - s.y(), 2) + pow(p.z() - s.z(), 2));
 
@@ -43,37 +39,21 @@ Eigen::Vector3d Spline3d::GetDesiredCrosstrackLocation(Eigen::Vector3d current_p
         {
             min_dist = dist;
             bestSplinePoint = s;
-            bestTangent = tangent;
+            bestT = t;
+            // bestTangent = tangent;
         }
     }
 
+    bestTangent = spline.derivatives(bestT, 1).col(1);
+}
+
+Eigen::Vector3d Spline3d::GetBestPoint()
+{
     return bestSplinePoint;
 }
 
-Eigen::Vector3d Spline3d::GetSplineUnitDirection(Eigen::Vector3d current_position)
+Eigen::Vector3d Spline3d::GetBestTangent()
 {
-    Eigen::Vector3d p = current_position;
-
-    double min_dist = std::numeric_limits<double>::max();
-    double bestT = 0.0;
-    Eigen::Vector3d bestSplinePoint;
-    Eigen::Vector3d bestTangent;
-
-    for (double t = 0; t <= 1; t += 0.001)
-    {
-        Eigen::Vector3d s = spline(t);
-        tangent = spline.derivatives(t, 1).col(1);
-
-        double dist = sqrt(pow(p.x() - s.x(), 2) + pow(p.y() - s.y(), 2) + pow(p.z() - s.z(), 2));
-
-        if (dist < min_dist)
-        {
-            min_dist = dist;
-            bestSplinePoint = s;
-            bestTangent = tangent;
-        }
-    }
-
     return bestTangent.normalized();
 }
 

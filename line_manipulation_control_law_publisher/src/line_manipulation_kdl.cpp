@@ -102,6 +102,18 @@ Eigen::Vector3d begin_cartesian_position;
 std::vector<uint8_t> hybrid_mode_list = DEFAULT_MODE;
 int desired_mode_idx = 0;
 
+// Parameters----------------------------------------------------------
+#ifdef HYBRID
+// Setup line, plane, and circle parameters
+Line3d line(p_1, p_2);
+double distance_param;
+Plane3d plane(p_1, p_2, p_3);
+double distance_param_x, distance_param_y;
+Circle3d circle(p_c1, p_c2, p_cc);
+double theta_param;
+Spline3d spline(p_s1, p_s2, p_s3, p_s4);
+#endif
+
 //------------------------------------------------------------------------------
 // FUNCTIONS
 //------------------------------------------------------------------------------
@@ -328,19 +340,6 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix3d force_rotation_matrix = Eigen::Map<Eigen::Matrix3d>(force_frame_tf_.M.data);
     force_rotation_matrix = force_rotation_matrix.transpose();
 
-    // 2) Choose line or plane objects
-    // -----------Line/Circle Parameters----------------------------------------------------------
-#ifdef HYBRID
-    // Setup line, plane, and circle parameters
-    Line3d line(p_1, p_2);
-    double distance_param;
-    Plane3d plane(p_1, p_2, p_3);
-    double distance_param_x, distance_param_y;
-    Circle3d circle(p_c1, p_c2, p_cc);
-    double theta_param;
-    Spline3d spline(p_s1, p_s2, p_s3, p_s4);
-#endif
-
     // ----------EE Pos: Set Desired and get current ee position and orientation-------------------
     // 3) Call line, plane, or circle (or nothing) object methods
     Eigen::Vector3d desired_position;
@@ -360,7 +359,8 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     }
     else if (hybrid_mode_list[SPLINE_MODE_IDX])
     {
-        desired_position = spline.GetDesiredCrosstrackLocation(ee_translation);
+        spline.FindDesiredSplinePoint(ee_translation);
+        desired_position = spline.GetBestPoint();
     }
 #endif
 
@@ -435,7 +435,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     }
     else if (hybrid_mode_list[SPLINE_MODE_IDX])
     {
-        e_t = spline.GetSplineUnitDirection(current_position);
+        e_t = spline.GetBestTangent();
         // std::cout << "e_t vector (spline)\n"
         //           << e_t << std::endl;
     }
@@ -459,6 +459,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix3d cur_R = current_orientation.toRotationMatrix();
     // Convert current rotation matrix to Euler angles (in radians)
     Eigen::Vector3d current_thetas = cur_R.eulerAngles(0, 1, 2);
+    std::cout << "current orientation: " << current_thetas << std::endl;
 
     double theta_x;
     double theta_y;
@@ -474,14 +475,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     uint8_t theta_x_neg = (e_t_plane_octant == 0 || e_t_plane_octant == 1 || e_t_plane_octant == 4 || e_t_plane_octant == 5);
     uint8_t theta_x_flip = (e_t_plane_octant == 2 || e_t_plane_octant == 3 || e_t_plane_octant == 4 || e_t_plane_octant == 5);
 
-    if (pos_error_flag)
-    {
-        // If we still have significant position error, do not change orientation yet
-        theta_x = current_thetas[0];
-        theta_y = current_thetas[1];
-        theta_z = current_thetas[2];
-    }
-    else if (hybrid_mode_list[LINE_MODE_IDX])
+    if (hybrid_mode_list[LINE_MODE_IDX])
     {
         theta_x = M_PI;
         // Calculate the adjusted "adjacent" line length for the theta_y term
@@ -563,12 +557,17 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     }
 #endif
 
+    double scale_factor = 1.0;
     // Scale the angle if needed
-    if (max_angle > angle_limit)
+    if (pos_error_flag)
     {
-        double scale_factor = angle_limit / max_angle;
-        angle_axis.angle() *= scale_factor;
+        scale_factor = 0.0;
     }
+    else if (max_angle > angle_limit)
+    {
+        scale_factor = angle_limit / max_angle;
+    }
+    angle_axis.angle() *= scale_factor;
 
     // Reconstruct limited rotation quaternion
     Eigen::Quaterniond error_limited(angle_axis);
