@@ -1,14 +1,7 @@
 #include "space_manipulation/spline3d.h"
 
-Spline3d::Spline3d(Eigen::Vector3d p_1, Eigen::Vector3d p_2, Eigen::Vector3d p_3, Eigen::Vector3d p_4)
+Spline3d::Spline3d(std::vector<Eigen::Vector3d> sample_points)
 {
-    // Define the sample points for interpolation
-    std::vector<Eigen::Vector3d> sample_points = {
-        p_1,
-        p_2,
-        p_3,
-        p_4};
-
     num_points = sample_points.size();
 
     Eigen::Matrix<double, 3, Eigen::Dynamic> points(3, num_points);

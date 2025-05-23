@@ -13,7 +13,7 @@
 class Spline3d
 {
 public:
-    Spline3d(Eigen::Vector3d p_1, Eigen::Vector3d p_2, Eigen::Vector3d p_3, Eigen::Vector3d p_4);
+    Spline3d(std::vector<Eigen::Vector3d> sample_points);
     void FindDesiredSplinePoint(Eigen::Vector3d current_position);
     visualization_msgs::Marker GetSplineVis();
     Eigen::Vector3d GetBestPoint();

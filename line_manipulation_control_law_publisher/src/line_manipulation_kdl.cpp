@@ -90,10 +90,13 @@ Eigen::Vector3d p_c1(0.38, 0.25, 0.5);
 Eigen::Vector3d p_c2(0.35, 0.0, 0.75);
 Eigen::Vector3d p_cc(0.4, 0.0, 0.5);
 // Points for spline
-Eigen::Vector3d p_s1(0.5, -0.5, 0.1);
-Eigen::Vector3d p_s2(0.5, -0.25, 0.25);
-Eigen::Vector3d p_s3(0.5, 0.2, 0.3);
-Eigen::Vector3d p_s4(0.5, 0.5, 0.5);
+// You can define any number of points here
+std::vector<Eigen::Vector3d> spline_points = {
+    Eigen::Vector3d(0.6, -0.5, 0.1),
+    Eigen::Vector3d(0.5, -0.25, 0.25),
+    Eigen::Vector3d(0.6, 0.2, 0.3),
+    Eigen::Vector3d(0.5, 0.5, 0.5),
+    Eigen::Vector3d(0.6, 0.75, 0.6)};
 
 bool start_flag = true;
 double time_begin_in_sec;
@@ -111,7 +114,7 @@ Plane3d plane(p_1, p_2, p_3);
 double distance_param_x, distance_param_y;
 Circle3d circle(p_c1, p_c2, p_cc);
 double theta_param;
-Spline3d spline(p_s1, p_s2, p_s3, p_s4);
+Spline3d spline(spline_points);
 #endif
 
 //------------------------------------------------------------------------------
