@@ -161,8 +161,8 @@ int main(int argc, char **argv)
     mode_text.color.a = 1.0;
 
     // POINTS properties (green)
-    points.scale.x = 0.2;
-    points.scale.y = 0.2;
+    points.scale.x = 0.05;
+    points.scale.y = 0.05;
 
     points.color.g = 1.0f;
     points.color.a = 1.0;
@@ -206,17 +206,23 @@ int main(int argc, char **argv)
 
     Eigen::Vector3d p_1;
     Eigen::Vector3d p_2;
+    Eigen::Vector3d p_3;
     Eigen::Quaterniond plane_orientation;
+    std::vector<double> spline_points;
     n.getParam("p_initial_x", p_1[0]);
     n.getParam("p_initial_y", p_1[1]);
     n.getParam("p_initial_z", p_1[2]);
     n.getParam("p_final_x", p_2[0]);
     n.getParam("p_final_y", p_2[1]);
     n.getParam("p_final_z", p_2[2]);
+    n.getParam("p_plane_x", p_3[0]);
+    n.getParam("p_plane_y", p_3[1]);
+    n.getParam("p_plane_z", p_3[2]);
     n.getParam("plane_orientation_w", plane_orientation.w());
     n.getParam("plane_orientation_x", plane_orientation.x());
     n.getParam("plane_orientation_y", plane_orientation.y());
     n.getParam("plane_orientation_z", plane_orientation.z());
+    n.getParam("spline_points", spline_points);
     plane.pose.position.x = p_1[0];
     plane.pose.position.y = p_1[1];
     plane.pose.position.z = p_1[2];
@@ -249,7 +255,7 @@ int main(int argc, char **argv)
       p.y = p_1[1] + i * p_difference[1];
       p.z = p_1[2] + i * p_difference[2];
 
-      points.points.push_back(p);
+      // points.points.push_back(p);
       line_strip.points.push_back(p);
 
       // The line list needs two points for each line
@@ -279,6 +285,8 @@ int main(int argc, char **argv)
       if (hybrid_mode_list[LINE_MODE_IDX])
       {
         // delete all pre-existing shapes/text
+        delete_marker.id = 0;
+        marker_pub.publish(delete_marker);
         delete_marker.id = 3;
         marker_pub.publish(delete_marker);
         delete_marker.id = 4;
@@ -288,13 +296,28 @@ int main(int argc, char **argv)
         delete_marker.id = 6;
         marker_pub.publish(delete_marker);
 
+        // Set points
+        geometry_msgs::Point p1;
+        p1.x = p_1.x();
+        p1.y = p_1.y();
+        p1.z = p_1.z();
+        geometry_msgs::Point p2;
+        p2.x = p_2.x();
+        p2.y = p_2.y();
+        p2.z = p_2.z();
+        points.points.push_back(p1);
+        points.points.push_back(p2);
+
         mode_text.text = "LINE MODE";
         marker_pub.publish(mode_text);
         marker_pub.publish(line_strip);
+        marker_pub.publish(points);
       }
       else if (hybrid_mode_list[PLANE_MODE_IDX])
       {
         // delete all pre-existing shapes/text
+        delete_marker.id = 0;
+        marker_pub.publish(delete_marker);
         delete_marker.id = 1;
         marker_pub.publish(delete_marker);
         delete_marker.id = 4;
@@ -304,13 +327,33 @@ int main(int argc, char **argv)
         delete_marker.id = 6;
         marker_pub.publish(delete_marker);
 
+        // Set points
+        geometry_msgs::Point p1;
+        p1.x = p_1.x();
+        p1.y = p_1.y();
+        p1.z = p_1.z();
+        geometry_msgs::Point p2;
+        p2.x = p_2.x();
+        p2.y = p_2.y();
+        p2.z = p_2.z();
+        geometry_msgs::Point p3;
+        p3.x = p_3.x();
+        p3.y = p_3.y();
+        p3.z = p_3.z();
+        points.points.push_back(p1);
+        points.points.push_back(p2);
+        points.points.push_back(p3);
+
         mode_text.text = "PLANE MODE";
         marker_pub.publish(mode_text);
         marker_pub.publish(plane);
+        marker_pub.publish(points);
       }
       else if (hybrid_mode_list[CIRCLE_MODE_IDX])
       {
         // delete all pre-existing shapes/text
+        delete_marker.id = 0;
+        marker_pub.publish(delete_marker);
         delete_marker.id = 1;
         marker_pub.publish(delete_marker);
         delete_marker.id = 3;
@@ -327,6 +370,8 @@ int main(int argc, char **argv)
       else if (hybrid_mode_list[SPLINE_MODE_IDX])
       {
         // delete all pre-existing shapes/text
+        delete_marker.id = 0;
+        marker_pub.publish(delete_marker);
         delete_marker.id = 1;
         marker_pub.publish(delete_marker);
         delete_marker.id = 3;
@@ -336,9 +381,20 @@ int main(int argc, char **argv)
         delete_marker.id = 5;
         marker_pub.publish(delete_marker);
 
+        // Set points
+        for (int i = 0; i < spline_points.size(); i += 3)
+        {
+          geometry_msgs::Point p;
+          p.x = spline_points[i];
+          p.y = spline_points[i + 1];
+          p.z = spline_points[i + 2];
+          points.points.push_back(p);
+        }
+
         mode_text.text = "SPLINE MODE";
         marker_pub.publish(mode_text);
         marker_pub.publish(spline);
+        marker_pub.publish(points);
       }
     }
     else

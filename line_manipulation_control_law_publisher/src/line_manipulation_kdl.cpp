@@ -63,6 +63,13 @@ ros::Publisher hybrid_mode_pub_;
 ros::Publisher matrix_pub;
 ros::Publisher spline_pub;
 ros::ServiceClient wrench_client;
+// ROS publishers for test visualization
+ros::Publisher fext_ee_pub_;
+ros::Publisher cur_pos_ee_pub_;
+ros::Publisher des_pos_ee_pub_;
+ros::Publisher cur_rot_pub_;
+ros::Publisher des_rot_pub_;
+ros::Publisher k_switch_pub_;
 gazebo_msgs::ApplyBodyWrench::Request apply_wrench_req;
 gazebo_msgs::ApplyBodyWrench::Response apply_wrench_resp;
 KDL::ChainDynParam *dyn_solver_raw_;
@@ -164,6 +171,21 @@ int main(int argc, char **argv)
 
     spline_pub = ros_node->advertise<visualization_msgs::Marker>("/spline", 1);
 
+    // Publishers for test results
+    ros::Publisher fext_ee_;
+    ros::Publisher cur_pos_ee;
+    ros::Publisher des_pos_ee;
+    ros::Publisher cur_rot;
+    ros::Publisher des_rot;
+    ros::Publisher k_switch;
+
+    fext_ee_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/f_ext", 1);
+    cur_pos_ee_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/cur_pos_ee", 1);
+    des_pos_ee_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/des_pos_ee", 1);
+    cur_rot_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/cur_rot", 1);
+    des_rot_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/des_rot", 1);
+    k_switch_pub_ = ros_node->advertise<std_msgs::Float64MultiArray>("/k_switch", 1);
+
     // Set rosparameters for line
     ros_node->setParam("/p_initial_x", p_1[0]);
     ros_node->setParam("/p_initial_y", p_1[1]);
@@ -171,6 +193,19 @@ int main(int argc, char **argv)
     ros_node->setParam("/p_final_x", p_2[0]);
     ros_node->setParam("/p_final_y", p_2[1]);
     ros_node->setParam("/p_final_z", p_2[2]);
+    ros_node->setParam("/p_plane_x", p_3[0]);
+    ros_node->setParam("/p_plane_y", p_3[1]);
+    ros_node->setParam("/p_plane_z", p_3[2]);
+    // Must flatten the spline poitns matrix so it can be set as a rosparameter
+    std::vector<double> spline_points_flat;
+    for (int i = 0; i < spline_points.size(); i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            spline_points_flat.push_back(spline_points[i][j]);
+        }
+    }
+    ros_node->setParam("/spline_points", spline_points_flat);
     // Set rosparameters for plane
     Plane3d plane(p_1, p_2, p_3);
     Eigen::Quaterniond plane_orientation(plane.GetPlaneUnitDirection());
@@ -597,9 +632,9 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     K_des(0, 0) = 500;
     K_des(1, 1) = 500;
     K_des(2, 2) = 500;
-    K_des(3, 3) = 30;
-    K_des(4, 4) = 30;
-    K_des(5, 5) = 30;
+    K_des(3, 3) = 40;
+    K_des(4, 4) = 40;
+    K_des(5, 5) = 40;
 
     K_switch.setIdentity();
 #ifdef HYBRID
@@ -839,6 +874,87 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // Publish Spline marker
     spline_pub.publish(spline.GetSplineVis());
+
+    // Publish a bunch of stuff to visualize results
+
+    // Calculate the Homogeneous Transformation Matrix of the EE frame with respect to the global frame
+    Eigen::Vector3d p_origin_ee = -R3_3 * current_position;
+    Eigen::Matrix<double, 4, 4> T;
+    T.setIdentity();
+    T.block<3, 3>(0, 0) = R3_3;
+    T.block<3, 1>(0, 3) = p_origin_ee;
+
+    // EE current and desired position in the EE frame
+    Eigen::Vector4d current_position_homogeneous;
+    current_position_homogeneous << current_position[0], current_position[1], current_position[2], 1.0;
+    Eigen::Vector4d current_position_ee_homogeneous = T * current_position_homogeneous;
+    Eigen::Vector3d current_position_ee = current_position_ee_homogeneous.head<3>();
+    // std::cout << "ee position: " << current_position_ee << std::endl;
+    geometry_msgs::Vector3 current_position_ee_final;
+    current_position_ee_final.x = current_position_ee.x();
+    current_position_ee_final.y = current_position_ee.y();
+    current_position_ee_final.z = current_position_ee.z();
+    cur_pos_ee_pub_.publish(current_position_ee_final);
+
+    Eigen::Vector4d desired_position_homogeneous;
+    desired_position_homogeneous << desired_position[0], desired_position[1], desired_position[2], 1.0;
+    Eigen::Vector4d desired_position_ee_homogeneous = T * desired_position_homogeneous;
+    Eigen::Vector3d desired_position_ee = desired_position_ee_homogeneous.head<3>();
+    // std::cout << "ee des position: " << desired_position_ee << std::endl;
+    geometry_msgs::Vector3 desired_position_ee_final;
+    desired_position_ee_final.x = desired_position_ee.x();
+    desired_position_ee_final.y = desired_position_ee.y();
+    desired_position_ee_final.z = desired_position_ee.z();
+    des_pos_ee_pub_.publish(desired_position_ee_final);
+
+    // EE orientation in the global frame
+    Eigen::AngleAxisd current_orientation_angle_axis(current_orientation);
+    Eigen::Vector3d current_orientation_euler = current_orientation_angle_axis.angle() * current_orientation_angle_axis.axis();
+    geometry_msgs::Vector3 current_orientation_euler_final;
+    current_orientation_euler_final.x = current_orientation_euler.x();
+    current_orientation_euler_final.y = current_orientation_euler.y();
+    current_orientation_euler_final.z = current_orientation_euler.z();
+    cur_rot_pub_.publish(current_orientation_euler_final);
+
+    Eigen::AngleAxisd desired_orientation_angle_axis(desired_orientation);
+    Eigen::Vector3d desired_orientation_euler = desired_orientation_angle_axis.angle() * desired_orientation_angle_axis.axis();
+    geometry_msgs::Vector3 desired_orientation_euler_final;
+    desired_orientation_euler_final.x = desired_orientation_euler.x();
+    desired_orientation_euler_final.y = desired_orientation_euler.y();
+    desired_orientation_euler_final.z = desired_orientation_euler.z();
+    des_rot_pub_.publish(desired_orientation_euler_final);
+
+    // Fext in the EE frame
+    Eigen::Vector4d Fext_homogeneous;
+    Fext_homogeneous << apply_wrench_req.wrench.force.x, apply_wrench_req.wrench.force.y, apply_wrench_req.wrench.force.z, 1.0;
+    Eigen::Vector4d Fext_ee_homogeneous = T * Fext_homogeneous;
+    Eigen::Vector3d Fext_ee = Fext_ee_homogeneous.head<3>();
+    // std::cout << "ee position: " << current_position_ee << std::endl;
+    geometry_msgs::Vector3 Fext_ee_final;
+    Fext_ee_final.x = Fext_ee.x();
+    Fext_ee_final.y = Fext_ee.y();
+    Fext_ee_final.z = Fext_ee.z();
+    fext_ee_pub_.publish(Fext_ee_final);
+
+    // K_switch matrix
+    std_msgs::Float64MultiArray k_switch_final;
+    k_switch_final.layout.dim.resize(2);
+    k_switch_final.layout.dim[0].label = "rows";
+    k_switch_final.layout.dim[0].size = 6;
+    k_switch_final.layout.dim[0].stride = 36; // 6*6
+    k_switch_final.layout.dim[1].label = "cols";
+    k_switch_final.layout.dim[1].size = 6;
+    k_switch_final.layout.dim[1].stride = 6;
+    k_switch_final.data.resize(36);
+    // Fill data in row-major order
+    for (int i = 0; i < 6; ++i)
+    {
+        for (int j = 0; j < 6; ++j)
+        {
+            k_switch_final.data[i * 6 + j] = K_switch(i, j);
+        }
+    }
+    k_switch_pub_.publish(k_switch_final);
 }
 
 void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
@@ -855,9 +971,9 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
     double max_force = 20;
     apply_wrench_req.body_name = "franka::panda_link7";
     apply_wrench_req.reference_frame = "world";
-    apply_wrench_req.wrench.force.x = ext_force_joystick[0] * max_force / 4;
-    apply_wrench_req.wrench.force.y = ext_force_joystick[1] * max_force / 4;
-    apply_wrench_req.wrench.force.z = ext_force_joystick[2] * max_force / 4;
+    apply_wrench_req.wrench.force.x = ext_force_joystick[0] * max_force / 8;
+    apply_wrench_req.wrench.force.y = ext_force_joystick[1] * max_force / 8;
+    apply_wrench_req.wrench.force.z = ext_force_joystick[2] * max_force / 8;
     // apply_wrench_req.start_time = 0;
     apply_wrench_req.duration = (ros::Duration)(-1);
     wrench_client.call(apply_wrench_req, apply_wrench_resp);
