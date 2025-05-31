@@ -164,7 +164,7 @@ int main(int argc, char **argv)
 
     pose_pub_ = ros_node->advertise<geometry_msgs::Pose>("/pose", 1);
 
-    traj_pub_ = ros_node->advertise<geometry_msgs::Point>("/traj", 1);
+    traj_pub_ = ros_node->advertise<geometry_msgs::Pose>("/traj", 1);
     twist_pub_ = ros_node->advertise<geometry_msgs::Twist>("/twist", 1);
 
     hybrid_mode_pub_ = ros_node->advertise<std_msgs::UInt8MultiArray>("/hybrid_mode", 1);
@@ -629,12 +629,12 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double, 6, 6> K_switch;
 
     K_des.setZero();
-    K_des(0, 0) = 500;
-    K_des(1, 1) = 500;
-    K_des(2, 2) = 500;
-    K_des(3, 3) = 40;
-    K_des(4, 4) = 40;
-    K_des(5, 5) = 40;
+    K_des(0, 0) = 300;
+    K_des(1, 1) = 300;
+    K_des(2, 2) = 300;
+    K_des(3, 3) = 30;
+    K_des(4, 4) = 30;
+    K_des(5, 5) = 30;
 
     K_switch.setIdentity();
 #ifdef HYBRID
@@ -866,10 +866,14 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     twist_pub_.publish(twist);
 
     // Publish Trajectory
-    geometry_msgs::Point traj;
-    traj.x = desired_position[0];
-    traj.y = desired_position[1];
-    traj.z = desired_position[2];
+    geometry_msgs::Pose traj;
+    traj.position.x = desired_position[0];
+    traj.position.y = desired_position[1];
+    traj.position.z = desired_position[2];
+    traj.orientation.x = desired_orientation.x();
+    traj.orientation.y = desired_orientation.y();
+    traj.orientation.z = desired_orientation.z();
+    traj.orientation.w = desired_orientation.w();
     traj_pub_.publish(traj);
 
     // Publish Spline marker
@@ -884,7 +888,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     T.block<3, 3>(0, 0) = R3_3;
     T.block<3, 1>(0, 3) = p_origin_ee;
 
-    // EE current and desired position in the EE frame
+    // Global Frame & EE current and desired position in the EE frame
     Eigen::Vector4d current_position_homogeneous;
     current_position_homogeneous << current_position[0], current_position[1], current_position[2], 1.0;
     Eigen::Vector4d current_position_ee_homogeneous = T * current_position_homogeneous;
