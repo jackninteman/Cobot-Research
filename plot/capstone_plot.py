@@ -3,16 +3,18 @@
 
 import rosbag
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import numpy as np
 import math
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.signal import argrelextrema
 plt.rcParams.update({'font.size': 12})
-plt.rcParams["figure.figsize"] = (6.4*1.3, 4.8*1.3)
+plt.rcParams["figure.figsize"] = (6.4*1.5, 4.8*1.5)
 plt.get_backend()
+colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-file = 'q_test.bag'
-bag = rosbag.Bag(f'/home/rsl/catkin_ws/capstone_figures/data/sim/{file}')
+file = 'real_spline_kd600-60.bag'
+bag = rosbag.Bag(f'/home/rsl/catkin_ws/capstone_figures/data/real/{file}')
 
 # Initialize some empty lists for storing the data
 f_ext, t_f_ext = [], [] # done
@@ -24,9 +26,9 @@ rot_c, t_rot_c = [], []
 rot_d, t_rot_d = [], []
 k_switch, t_k_switch = [], [] # done
 
-plot_f_ext = False
-plot_pos_ee = False
-plot_pos = False
+plot_f_ext = True
+plot_pos_ee = True
+plot_pos = True
 plot_rot = True
 plot_k_switch = False
 
@@ -89,28 +91,102 @@ ttmp = []
 bag.close()
 
 if file == 'sim_line_kd300-30.bag':
-    tmin = 6
-    tmax = 24
+    tmin = 14.2
+    tmax = 30
+    mode = 'Line'
+    min_gap = 2.5
+    Kp = 300
+    Kr = 30
 elif file == 'sim_line_kd600-60.bag':
-    tmin = 4.5
-    tmax = 15
+    tmin = 5.6
+    tmax = 19
+    mode = 'Line'
+    min_gap = 2.5
+    Kp = 600
+    Kr = 60
 elif file == 'sim_plane_kd300-30.bag':
-    tmin = 26
-    tmax = 39
+    tmin = 43
+    tmax = 62
+    mode = 'Plane'
+    min_gap = 2.5
+    Kp = 300
+    Kr = 30
+elif file == 'sim_plane_kd600-60.bag':
+    tmin = 8.3
+    tmax = 37
+    mode = 'Plane'
+    min_gap = 4.0
+    Kp = 600
+    Kr = 60
 elif file == 'sim_spline_kd300-30.bag':
-    tmin = 9.4
+    tmin = 9.1
     tmax = 27
+    mode = 'Spline'
+    min_gap = 2.5
+    Kp = 300
+    Kr = 30
+elif file == 'sim_spline_kd600-60.bag':
+    tmin = 0.5
+    tmax = 30
+    mode = 'Spline'
+    min_gap = 4.0
+    Kp = 600
+    Kr = 60
+elif file == 'real_line_kd300-30.bag':
+    tmin = 5.1
+    tmax = 15
+    mode = 'Line'
+    min_gap = 2.5
+    Kp = 300
+    Kr = 30
+elif file == 'real_line_kd600-60.bag':
+    tmin = 4.6
+    tmax = 15
+    mode = 'Line'
+    min_gap = 2.5
+    Kp = 600
+    Kr = 60
+elif file == 'real_plane_kd300-30.bag':
+    tmin = 5
+    tmax = 21
+    mode = 'Plane'
+    min_gap = 2.5
+    Kp = 300
+    Kr = 30
+elif file == 'real_plane_kd600-60.bag':
+    tmin = 15
+    tmax = 25
+    min_gap = 2.5
+    mode = 'Plane'
+    Kp = 600
+    Kr = 60
+elif file == 'real_spline_kd300-30.bag':
+    tmin = 17.1
+    tmax = 32
+    min_gap = 2.5
+    mode = 'Spline'
+    Kp = 300
+    Kr = 30
+elif file == 'real_spline_kd600-60.bag':
+    tmin = 3.51
+    tmax = 18
+    min_gap = 2.5
+    mode = 'Spline'
+    Kp = 600
+    Kr = 60
 else:
     tmin = -np.inf
     tmax = np.inf
+    min_gap = 2.5
+    mode = 'None'
+    Kp = 300
+    Kr = 30
 
 axes_upper = ['X', 'Y', 'Z']
 axes_lower = ['x', 'y', 'z']
 m_to_mm = 1000
 fig_count = 0
 linewidth = 1.5
-Kp = 500
-Kr = 30
 
 #-----------------------------------------------------------------------
 # 3D plots with 2D projections
@@ -143,7 +219,6 @@ plt.title('Local Extrema of y(t)')
 plt.grid(True)
 
 filtered_idx = []
-min_gap = 2.5
 
 for i in merged_idx:
     if not filtered_idx:
@@ -220,9 +295,9 @@ if plot_pos:
         ax.text(x=xmin + ((xmax - xmin) / 2), y=ymax + yoff, z=zmin - zoff, s=fr'$\hat{{X}}_{{g}}$ [m]')
         ax.text(x=xmax + xoff, y=ymin + ((ymax - ymin) / 2), z=zmin - zoff, s=fr'$\hat{{Y}}_{{g}}$ [m]')
         ax.text(x=xmax + xoff, y=ymin - yoff, z=zmin + ((zmax-zmin) / 2), s=fr'$\hat{{Z}}_{{g}}$ [m]')
-        ax.set_title(fr"3D Trajectory Control (Global Frame, $t \in [{round(tc[seg[0]], 2)}, {round(tc[seg[1]], 2)}]$ s, $K_{{d}}$ = {Kp})")
-        ax.legend(loc='right', fontsize='small')
-        ax.view_init(elev=20, azim=45)
+        ax.set_title(fr"3D Trajectory Control ({mode} Mode, Global Frame, $t \in [{round(tc[seg[0]], 2)}, {round(tc[seg[1]], 2)}]$ s, $K_{{d}}$ = {Kp})")
+        ax.legend(loc='center left', bbox_to_anchor=(0.85, 0.5), fontsize='small')
+        ax.view_init(elev=35, azim=45)
 
     #-------------------------------------------------------------------
     # Make a plot for all time segments
@@ -261,9 +336,9 @@ if plot_pos:
     ax.text(x=xmin + ((xmax - xmin) / 2), y=ymax + yoff, z=zmin - zoff, s=fr'$\hat{{X}}_{{g}}$ [m]')
     ax.text(x=xmax + xoff, y=ymin + ((ymax - ymin) / 2), z=zmin - zoff, s=fr'$\hat{{Y}}_{{g}}$ [m]')
     ax.text(x=xmax + xoff, y=ymin - yoff, z=zmin + ((zmax-zmin) / 2), s=fr'$\hat{{Z}}_{{g}}$ [m]')
-    ax.set_title(fr"3D Trajectory Control (Global Frame, $t \in [{round(tc[idx_segs[0][0]], 2)}, {round(tc[idx_segs[-1][1]])}]$ s, $K_{{d}}$ = {Kp})")
-    ax.legend(loc='right', fontsize='small')
-    ax.view_init(elev=20, azim=45)
+    ax.set_title(fr"3D Trajectory Control ({mode} Mode, Global Frame, $t \in [{round(tc[idx_segs[0][0]], 2)}, {round(tc[idx_segs[-1][1]], 2)}]$ s, $K_{{d}}$ = {Kp})")
+    ax.legend(loc='center left', bbox_to_anchor=(0.85, 0.5), fontsize='small')
+    ax.view_init(elev=35, azim=45)
 
 #-----------------------------------------------------------------------
 # External force plots
@@ -273,18 +348,28 @@ if plot_f_ext:
     data1 = np.asarray(f_ext)
     time1_trimmed = time1[idx_start:idx_end]
     data1_trimmed = data1[idx_start:idx_end]
-    for i in range(3):
-        plt.figure(fig_count)
-        fig_count += 1
 
-        plt.plot(time1_trimmed, data1_trimmed[:,i], linewidth=linewidth, label=fr'$F_{{{axes_lower[i]}}}$')
-        plt.title(f'External Force Applied at the End Effector ($\hat{axes_upper[i]}_{{ee}}$ Axis)')
-        plt.legend(loc='best')
-        plt.xlabel('Time [s]')
-        plt.ylabel('Force [N]')
+    plt.figure(fig_count)
+    fig_count += 1
+    
+    for i in range(3):
+        ax = plt.subplot(3, 1, i+1)
+
+        plt.plot(time1_trimmed, data1_trimmed[:,i], linewidth=linewidth)#, label=fr'$F_{{{axes_lower[i]}_ee}}$')
+        if i == 0:
+            plt.title(f'External Force Applied at the End Effector')
+        # plt.legend(loc='best')
+        if i == 2:
+            plt.xlabel('Time [s]')
+        plt.ylabel(fr'$F_{{{axes_lower[i]}}}$ [N]')
 
         max_val = np.max(data1_trimmed[:,i])
         min_val = np.min(data1_trimmed[:,i])
+        for i in range(len(idx_segs)):
+            if i >= len(colors) - 1:
+                break
+            seg = idx_segs[i]
+            ax.axvspan(tc[seg[0]], tc[seg[1]], color=colors[i+1], alpha=0.2)
         plt.grid(1)
 
 #-----------------------------------------------------------------------
@@ -300,16 +385,21 @@ if plot_pos_ee:
     time2_trimmed = time2[idx_start:idx_end]
     data2_trimmed = data2[idx_start:idx_end]
     y_tick = 2
-    for i in range(3):
-        plt.figure(fig_count)
-        fig_count += 1
+
+    plt.figure(fig_count)
+    fig_count += 1
+    
+    for i in range(3): 
+        ax = plt.subplot(3, 1, i+1)
 
         plt.plot(time1_trimmed, data1_trimmed[:,i]*m_to_mm, linewidth=linewidth, label=fr'${axes_lower[i]}_{{ee}}$')
         plt.plot(time2_trimmed, data2_trimmed[:,i]*m_to_mm, '--', linewidth=linewidth, label=fr'${axes_lower[i]}_{{ee_d}}$')
-        plt.title(fr'$\hat{axes_upper[i]}_{{ee}}$ Axis Trajectory Control ($K_{{d}}$ = {Kp})')
-        plt.legend(loc='best')
-        plt.xlabel('Time [s]')
-        plt.ylabel('Position [mm]')
+        if i == 0:
+            plt.title(fr'Position Trajectory Control ({mode} Mode, $K_{{d}}$ = {Kp})')
+        plt.legend(loc='center left', bbox_to_anchor=(0.95, 0.75))
+        if i == 2:
+            plt.xlabel('Time [s]')
+        plt.ylabel(fr'$\hat{axes_upper[i]}_{{ee}}$ [m]')
 
         max_val = max(np.max(data1_trimmed[:,i]), np.max(data2_trimmed[:,i]))*m_to_mm
         min_val = min(np.min(data1_trimmed[:,i]), np.min(data2_trimmed[:,i]))*m_to_mm
@@ -320,6 +410,12 @@ if plot_pos_ee:
 
         # plt.yticks(np.arange(y_min_round, y_max_round, step=y_tick))
         plt.ylim(y_min_round, y_max_round)
+        ax.yaxis.set_major_locator(MultipleLocator(abs(round(ymax / 3))))
+        for i in range(len(idx_segs)):
+            if i >= len(colors) - 1:
+                break
+            seg = idx_segs[i]
+            ax.axvspan(tc[seg[0]], tc[seg[1]], color=colors[i+1], alpha=0.2)
         plt.grid(1)
 
 #-----------------------------------------------------------------------
@@ -341,8 +437,8 @@ if plot_rot:
     labels = ['x', 'y', 'z', 'w']
     
     for i, comp in enumerate(labels):
-        print(i)
-        plt.subplot(4, 1, i+1)
+        # print(i)
+        ax = plt.subplot(4, 1, i+1)
 
         plt.plot(time1_trimmed, data1_trimmed[:, i], label=fr'$q_{{{comp}}}$')
         plt.plot(time2_trimmed, data2_trimmed[:, i], '--', label=fr'$q_{{{comp}_d}}$')
@@ -355,12 +451,18 @@ if plot_rot:
 
         plt.ylabel(fr'$q_{{{comp}}}$')
         if i == 0:
-            plt.title(f"Quaternion Trajectory Control (Global Frame, $K_{{d}}$ = {Kr})")
+            plt.title(f"Quaternion Trajectory Control ({mode} Mode, Global Frame, $K_{{d}}$ = {Kr})")
         if i == 3:
             plt.xlabel("Time [s]")
-        plt.legend()
+        plt.legend(loc='center left', bbox_to_anchor=(0.95, 0.75))
         plt.grid(1)
         plt.ylim(ymin, ymax)
+        ax.yaxis.set_major_locator(MultipleLocator(abs((ymax - mean) / 2)))
+        for i in range(len(idx_segs)):
+            if i >= len(colors) - 1:
+                break
+            seg = idx_segs[i]
+            ax.axvspan(tc[seg[0]], tc[seg[1]], color=colors[i+1], alpha=0.2)
 
 #-----------------------------------------------------------------------
 # Make a plot for the switching matrix
@@ -384,7 +486,7 @@ if plot_k_switch:
     plt.yticks([0, 1], ['0 = Stiffness\nDisabled', '1 = Stiffness\nEnabled'])
     plt.xlabel('Time [s]')
     plt.title(fr'$K_{{switch}}$ Values vs Time')
-    plt.legend(loc='best')
+    plt.legend(loc='center left', bbox_to_anchor=(0.95, 0.75))
 
 plt.show(block=False)
 
