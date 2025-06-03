@@ -90,7 +90,7 @@ Eigen::Vector3d ext_force_joystick;
 
 // Points for line and plane
 Eigen::Vector3d p_1(0.5, -0.25, 0.15);
-Eigen::Vector3d p_2(0.3, 0.25, 0.3);
+Eigen::Vector3d p_2(0.4, 0.25, 0.3);
 Eigen::Vector3d p_3(0.5, 0.0, 0.305);
 // Points for circle
 Eigen::Vector3d p_c1(0.38, 0.25, 0.5);
@@ -609,6 +609,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // Reconstruct limited rotation quaternion
     Eigen::Quaterniond error_limited(angle_axis);
+    Eigen::Quaterniond q_desired = current_orientation * error_limited;
     error.tail(3) << error_limited.x(), error_limited.y(), error_limited.z();
     error.tail(3) << current_orientation * error.tail(3);
     // error.tail(3) << 0,0,0; //Use this if we don't care about orientation
@@ -629,12 +630,12 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double, 6, 6> K_switch;
 
     K_des.setZero();
-    K_des(0, 0) = 300;
-    K_des(1, 1) = 300;
-    K_des(2, 2) = 300;
-    K_des(3, 3) = 30;
-    K_des(4, 4) = 30;
-    K_des(5, 5) = 30;
+    K_des(0, 0) = 600;
+    K_des(1, 1) = 600;
+    K_des(2, 2) = 600;
+    K_des(3, 3) = 60;
+    K_des(4, 4) = 60;
+    K_des(5, 5) = 60;
 
     K_switch.setIdentity();
 #ifdef HYBRID
@@ -870,10 +871,10 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     traj.position.x = desired_position[0];
     traj.position.y = desired_position[1];
     traj.position.z = desired_position[2];
-    traj.orientation.x = desired_orientation.x();
-    traj.orientation.y = desired_orientation.y();
-    traj.orientation.z = desired_orientation.z();
-    traj.orientation.w = desired_orientation.w();
+    traj.orientation.x = q_desired.x();
+    traj.orientation.y = q_desired.y();
+    traj.orientation.z = q_desired.z();
+    traj.orientation.w = q_desired.w();
     traj_pub_.publish(traj);
 
     // Publish Spline marker

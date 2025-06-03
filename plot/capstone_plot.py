@@ -8,13 +8,14 @@ import numpy as np
 import math
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.signal import argrelextrema
+from scipy.spatial.transform import Rotation as R
 plt.rcParams.update({'font.size': 12})
 plt.rcParams["figure.figsize"] = (6.4*1.5, 4.8*1.5)
 plt.get_backend()
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-file = 'real_spline_kd600-60.bag'
-bag = rosbag.Bag(f'/home/rsl/catkin_ws/capstone_figures/data/real/{file}')
+file = 'real/spline_kd600_60.bag'
+bag = rosbag.Bag(f'/home/rsl/catkin_ws/capstone_figures/data/{file}')
 
 # Initialize some empty lists for storing the data
 f_ext, t_f_ext = [], [] # done
@@ -90,86 +91,86 @@ t_k_switch = [tt - ttmp[0] for tt in ttmp]
 ttmp = []
 bag.close()
 
-if file == 'sim_line_kd300-30.bag':
-    tmin = 14.2
-    tmax = 30
+if file == 'sim/line_kd300_30.bag':
+    tmin = 17.5
+    tmax = 36
     mode = 'Line'
     min_gap = 2.5
     Kp = 300
     Kr = 30
-elif file == 'sim_line_kd600-60.bag':
-    tmin = 5.6
-    tmax = 19
+elif file == 'sim/line_kd600_60.bag':
+    tmin = 13.6
+    tmax = 30
     mode = 'Line'
     min_gap = 2.5
     Kp = 600
     Kr = 60
-elif file == 'sim_plane_kd300-30.bag':
-    tmin = 43
-    tmax = 62
-    mode = 'Plane'
-    min_gap = 2.5
-    Kp = 300
-    Kr = 30
-elif file == 'sim_plane_kd600-60.bag':
-    tmin = 8.3
+elif file == 'sim/plane_kd300_30.bag':
+    tmin = 14.2
     tmax = 37
     mode = 'Plane'
-    min_gap = 4.0
-    Kp = 600
-    Kr = 60
-elif file == 'sim_spline_kd300-30.bag':
-    tmin = 9.1
-    tmax = 27
-    mode = 'Spline'
     min_gap = 2.5
     Kp = 300
     Kr = 30
-elif file == 'sim_spline_kd600-60.bag':
-    tmin = 0.5
-    tmax = 30
-    mode = 'Spline'
-    min_gap = 4.0
-    Kp = 600
-    Kr = 60
-elif file == 'real_line_kd300-30.bag':
-    tmin = 5.1
-    tmax = 15
-    mode = 'Line'
-    min_gap = 2.5
-    Kp = 300
-    Kr = 30
-elif file == 'real_line_kd600-60.bag':
-    tmin = 4.6
-    tmax = 15
-    mode = 'Line'
-    min_gap = 2.5
-    Kp = 600
-    Kr = 60
-elif file == 'real_plane_kd300-30.bag':
-    tmin = 5
-    tmax = 21
+elif file == 'sim/plane_kd600_60.bag':
+    tmin = 26.1
+    tmax = 45
     mode = 'Plane'
+    min_gap = 4.0
+    Kp = 600
+    Kr = 60
+elif file == 'sim/spline_kd300_30.bag':
+    tmin = 34.2
+    tmax = 50
+    mode = 'Spline'
     min_gap = 2.5
     Kp = 300
     Kr = 30
-elif file == 'real_plane_kd600-60.bag':
-    tmin = 15
+elif file == 'sim/spline_kd600_60.bag':
+    tmin = 30.5
+    tmax = 50
+    mode = 'Spline'
+    min_gap = 4.0
+    Kp = 600
+    Kr = 60
+elif file == 'real/line_kd300_30.bag':
+    tmin = 16.8
+    tmax = 31
+    mode = 'Line'
+    min_gap = 2.5
+    Kp = 300
+    Kr = 30
+elif file == 'real/line_kd600_60.bag':
+    tmin = 13.8
+    tmax = 26
+    mode = 'Line'
+    min_gap = 2.5
+    Kp = 600
+    Kr = 60
+elif file == 'real/plane_kd300_30.bag':
+    tmin = 10.9
     tmax = 25
+    mode = 'Plane'
+    min_gap = 2.5
+    Kp = 300
+    Kr = 30
+elif file == 'real/plane_kd600_60.bag':
+    tmin = 23
+    tmax = 34
     min_gap = 2.5
     mode = 'Plane'
     Kp = 600
     Kr = 60
-elif file == 'real_spline_kd300-30.bag':
-    tmin = 17.1
-    tmax = 32
+elif file == 'real/spline_kd300_30.bag':
+    tmin = 20.2
+    tmax = 33
     min_gap = 2.5
     mode = 'Spline'
     Kp = 300
     Kr = 30
-elif file == 'real_spline_kd600-60.bag':
-    tmin = 3.51
-    tmax = 18
+elif file == 'real/spline_kd600_60.bag':
+    tmin = 10.65
+    tmax = 23
     min_gap = 2.5
     mode = 'Spline'
     Kp = 600
@@ -270,16 +271,19 @@ if plot_pos:
         ax.plot(xd[seg[0]:seg[1]], yd[seg[0]:seg[1]], zd[seg[0]:seg[1]], '--', label='3D Trajectory', linewidth=linewidth)
 
         # Projection on XY plane (z = min(z))
-        ax.plot(xc[seg[0]:seg[1]], yc[seg[0]:seg[1]], min(zc[seg[0]:seg[1]]) * np.ones_like(zc[seg[0]:seg[1]]), label='XY Position', linewidth=linewidth)
-        ax.plot(xd[seg[0]:seg[1]], yd[seg[0]:seg[1]], min(zd[seg[0]:seg[1]]) * np.ones_like(zd[seg[0]:seg[1]]), '--', label='XY Trajectory', linewidth=linewidth)
+        minz = min(min(zc[seg[0]:seg[1]]), min(zd[seg[0]:seg[1]]))
+        ax.plot(xc[seg[0]:seg[1]], yc[seg[0]:seg[1]], minz * np.ones_like(zc[seg[0]:seg[1]]), label='XY Position', linewidth=linewidth)
+        ax.plot(xd[seg[0]:seg[1]], yd[seg[0]:seg[1]], minz * np.ones_like(zd[seg[0]:seg[1]]), '--', label='XY Trajectory', linewidth=linewidth)
 
         # Projection on XZ plane (y = min(y))
-        ax.plot(xc[seg[0]:seg[1]], min(yc[seg[0]:seg[1]]) * np.ones_like(yc[seg[0]:seg[1]]), zc[seg[0]:seg[1]], label='XZ Position', linewidth=linewidth)
-        ax.plot(xd[seg[0]:seg[1]], min(yd[seg[0]:seg[1]]) * np.ones_like(yd[seg[0]:seg[1]]), zd[seg[0]:seg[1]], '--', label='XZ Trajectory', linewidth=linewidth)
+        miny = min(min(yc[seg[0]:seg[1]]), min(yd[seg[0]:seg[1]]))
+        ax.plot(xc[seg[0]:seg[1]], miny * np.ones_like(yc[seg[0]:seg[1]]), zc[seg[0]:seg[1]], label='XZ Position', linewidth=linewidth)
+        ax.plot(xd[seg[0]:seg[1]], miny * np.ones_like(yd[seg[0]:seg[1]]), zd[seg[0]:seg[1]], '--', label='XZ Trajectory', linewidth=linewidth)
 
         # Projection on YZ plane (x = min(x))
-        ax.plot(min(xc[seg[0]:seg[1]]) * np.ones_like(xc[seg[0]:seg[1]]), yc[seg[0]:seg[1]], zc[seg[0]:seg[1]], label='YZ Position', linewidth=linewidth)
-        ax.plot(min(xd[seg[0]:seg[1]]) * np.ones_like(xd[seg[0]:seg[1]]), yd[seg[0]:seg[1]], zd[seg[0]:seg[1]], '--', label='YZ Trajectory', linewidth=linewidth)
+        minx = min(min(xc[seg[0]:seg[1]]), min(xd[seg[0]:seg[1]]))
+        ax.plot(minx * np.ones_like(xc[seg[0]:seg[1]]), yc[seg[0]:seg[1]], zc[seg[0]:seg[1]], label='YZ Position', linewidth=linewidth)
+        ax.plot(minx * np.ones_like(xd[seg[0]:seg[1]]), yd[seg[0]:seg[1]], zd[seg[0]:seg[1]], '--', label='YZ Trajectory', linewidth=linewidth)
 
         # Axis labels
         offset = 0.25
@@ -311,16 +315,19 @@ if plot_pos:
     ax.plot(xd[idx_start:idx_end], yd[idx_start:idx_end], zd[idx_start:idx_end], '--', label='3D Trajectory', linewidth=linewidth)
 
     # Projection on XY plane (z = min(z))
-    ax.plot(xc[idx_start:idx_end], yc[idx_start:idx_end], min(zc[idx_start:idx_end]) * np.ones_like(zc[idx_start:idx_end]), label='XY Position', linewidth=linewidth)
-    ax.plot(xd[idx_start:idx_end], yd[idx_start:idx_end], min(zd[idx_start:idx_end]) * np.ones_like(zd[idx_start:idx_end]), '--', label='XY Trajectory', linewidth=linewidth)
+    minz = min(min(zc[idx_start:idx_end]), min(zd[idx_start:idx_end]))
+    ax.plot(xc[idx_start:idx_end], yc[idx_start:idx_end], minz * np.ones_like(zc[idx_start:idx_end]), label='XY Position', linewidth=linewidth)
+    ax.plot(xd[idx_start:idx_end], yd[idx_start:idx_end], minz * np.ones_like(zd[idx_start:idx_end]), '--', label='XY Trajectory', linewidth=linewidth)
 
     # Projection on XZ plane (y = min(y))
-    ax.plot(xc[idx_start:idx_end], min(yc[idx_start:idx_end]) * np.ones_like(yc[idx_start:idx_end]), zc[idx_start:idx_end], label='XZ Position', linewidth=linewidth)
-    ax.plot(xd[idx_start:idx_end], min(yd[idx_start:idx_end]) * np.ones_like(yd[idx_start:idx_end]), zd[idx_start:idx_end], '--', label='XZ Trajectory', linewidth=linewidth)
+    miny = min(min(yc[idx_start:idx_end]), min(yd[idx_start:idx_end]))
+    ax.plot(xc[idx_start:idx_end], miny * np.ones_like(yc[idx_start:idx_end]), zc[idx_start:idx_end], label='XZ Position', linewidth=linewidth)
+    ax.plot(xd[idx_start:idx_end], miny * np.ones_like(yd[idx_start:idx_end]), zd[idx_start:idx_end], '--', label='XZ Trajectory', linewidth=linewidth)
 
     # Projection on YZ plane (x = min(x))
-    ax.plot(min(xc[idx_start:idx_end]) * np.ones_like(xc[idx_start:idx_end]), yc[idx_start:idx_end], zc[idx_start:idx_end], label='YZ Position', linewidth=linewidth)
-    ax.plot(min(xd[idx_start:idx_end]) * np.ones_like(xd[idx_start:idx_end]), yd[idx_start:idx_end], zd[idx_start:idx_end], '--', label='YZ Trajectory', linewidth=linewidth)
+    minx = min(min(xc[idx_start:idx_end]), min(xd[idx_start:idx_end]))
+    ax.plot(minx * np.ones_like(xc[idx_start:idx_end]), yc[idx_start:idx_end], zc[idx_start:idx_end], label='YZ Position', linewidth=linewidth)
+    ax.plot(minx * np.ones_like(xd[idx_start:idx_end]), yd[idx_start:idx_end], zd[idx_start:idx_end], '--', label='YZ Trajectory', linewidth=linewidth)
 
     # Axis labels
     offset = 0.25
@@ -388,6 +395,14 @@ if plot_pos_ee:
 
     plt.figure(fig_count)
     fig_count += 1
+
+    mean_p_err = 0
+    num_points = len(time1_trimmed)
+    for i in range(num_points):
+        err = np.linalg.norm(data2_trimmed[i,:] - data1_trimmed[i,:])
+        mean_p_err += err
+    mean_p_err /= num_points
+    print(f'P Mean Error: {mean_p_err}')
     
     for i in range(3): 
         ax = plt.subplot(3, 1, i+1)
@@ -435,6 +450,26 @@ if plot_rot:
     fig_count += 1
 
     labels = ['x', 'y', 'z', 'w']
+
+    mean_q_error = 0
+    num_points = len(time1_trimmed)
+    for i in range(num_points):
+        qd = data2_trimmed[i,:]
+        q = data1_trimmed[i,:]
+
+        qd = qd / np.linalg.norm(qd)
+        q = q / np.linalg.norm(q)
+
+        rd = R.from_quat(qd)
+        r = R.from_quat(q)
+        rerr = rd.inv() * r
+
+        rvec = rerr.as_rotvec()
+        err = np.linalg.norm(rvec)
+
+        mean_q_error += err
+    mean_q_error /= num_points
+    print(f'Q Mean Error: {mean_q_error}')
     
     for i, comp in enumerate(labels):
         # print(i)
