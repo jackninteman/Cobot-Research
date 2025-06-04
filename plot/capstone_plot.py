@@ -9,6 +9,7 @@ import math
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.signal import argrelextrema
 from scipy.spatial.transform import Rotation as R
+from matplotlib.patches import Patch
 plt.rcParams.update({'font.size': 12})
 plt.rcParams["figure.figsize"] = (6.4*1.5, 4.8*1.5)
 plt.get_backend()
@@ -26,13 +27,23 @@ pos_d, t_pos_d = [], [] # done
 rot_c, t_rot_c = [], []
 rot_d, t_rot_d = [], []
 k_switch, t_k_switch = [], [] # done
+h_mode, t_mode = [], []
 
-plot_f_ext = True
-plot_pos_ee = True
+plot_f_ext = False
+plot_pos_ee = False
 plot_pos = True
-plot_rot = True
+plot_rot = False
 plot_k_switch = False
 
+# ttmp = []
+# for topic, msg, t in bag.read_messages(topics=['/hybrid_mode']):
+#     ttmp.append(t.to_sec())
+#     if isinstance(msg.data, bytes):
+#         tmp = np.frombuffer(msg.data, dtype=np.uint8)
+#     else:
+#         tmp = np.array(msg.data, dtype=np.uint8)
+#     h_mode.append(tmp)
+# t_mode = [tt - ttmp[0] for tt in ttmp]
 ttmp = []
 for topic,msg,t in bag.read_messages(topics=['/pose']):
     ttmp.append(t.to_sec())
@@ -133,6 +144,13 @@ elif file == 'sim/spline_kd600_60.bag':
     min_gap = 4.0
     Kp = 600
     Kr = 60
+elif file == 'sim/hybrid.bag':
+    tmin = 1
+    tmax = 23
+    mode = 'Hybrid'
+    min_gap = 4.0
+    Kp = 300
+    Kr = 30
 elif file == 'real/line_kd300_30.bag':
     tmin = 16.8
     tmax = 31
@@ -175,6 +193,13 @@ elif file == 'real/spline_kd600_60.bag':
     mode = 'Spline'
     Kp = 600
     Kr = 60
+elif file == 'real/hybrid.bag':
+    tmin = 12
+    tmax = 40
+    mode = 'Hybrid'
+    min_gap = 4.0
+    Kp = 300
+    Kr = 30
 else:
     tmin = -np.inf
     tmax = np.inf
@@ -296,11 +321,11 @@ if plot_pos:
         zmin = ax.get_zlim3d()[0]
         zmax = ax.get_zlim3d()[1]
         zoff = (zmax - zmin) * offset
-        ax.text(x=xmin + ((xmax - xmin) / 2), y=ymax + yoff, z=zmin - zoff, s=fr'$\hat{{X}}_{{g}}$ [m]')
-        ax.text(x=xmax + xoff, y=ymin + ((ymax - ymin) / 2), z=zmin - zoff, s=fr'$\hat{{Y}}_{{g}}$ [m]')
-        ax.text(x=xmax + xoff, y=ymin - yoff, z=zmin + ((zmax-zmin) / 2), s=fr'$\hat{{Z}}_{{g}}$ [m]')
-        ax.set_title(fr"3D Trajectory Control ({mode} Mode, Global Frame, $t \in [{round(tc[seg[0]], 2)}, {round(tc[seg[1]], 2)}]$ s, $K_{{d}}$ = {Kp})")
-        ax.legend(loc='center left', bbox_to_anchor=(0.85, 0.5), fontsize='small')
+        ax.text(x=xmin + ((xmax - xmin) / 2), y=ymax + yoff, z=zmin - zoff, s=fr'$\hat{{X}}_{{g}}$ [m]', fontsize=20)
+        ax.text(x=xmax + xoff, y=ymin + ((ymax - ymin) / 2), z=zmin - zoff, s=fr'$\hat{{Y}}_{{g}}$ [m]', fontsize=20)
+        ax.text(x=xmax + xoff, y=ymin - yoff, z=zmin + ((zmax-zmin) / 2), s=fr'$\hat{{Z}}_{{g}}$ [m]', fontsize=20)
+        ax.set_title(f"3D Trajectory Control \n({mode} Mode, Global Frame, $t \in [{round(tc[seg[0]], 2)}, {round(tc[seg[1]], 2)}]$ s, $K_{{d}}$ = {Kp})", fontsize=20)
+        ax.legend(loc='center left', bbox_to_anchor=(0.80, 0.5), fontsize=14)
         ax.view_init(elev=35, azim=45)
 
     #-------------------------------------------------------------------
@@ -340,11 +365,11 @@ if plot_pos:
     zmin = ax.get_zlim3d()[0]
     zmax = ax.get_zlim3d()[1]
     zoff = (zmax - zmin) * offset
-    ax.text(x=xmin + ((xmax - xmin) / 2), y=ymax + yoff, z=zmin - zoff, s=fr'$\hat{{X}}_{{g}}$ [m]')
-    ax.text(x=xmax + xoff, y=ymin + ((ymax - ymin) / 2), z=zmin - zoff, s=fr'$\hat{{Y}}_{{g}}$ [m]')
-    ax.text(x=xmax + xoff, y=ymin - yoff, z=zmin + ((zmax-zmin) / 2), s=fr'$\hat{{Z}}_{{g}}$ [m]')
-    ax.set_title(fr"3D Trajectory Control ({mode} Mode, Global Frame, $t \in [{round(tc[idx_segs[0][0]], 2)}, {round(tc[idx_segs[-1][1]], 2)}]$ s, $K_{{d}}$ = {Kp})")
-    ax.legend(loc='center left', bbox_to_anchor=(0.85, 0.5), fontsize='small')
+    ax.text(x=xmin + ((xmax - xmin) / 2), y=ymax + yoff, z=zmin - zoff, s=fr'$\hat{{X}}_{{g}}$ [m]', fontsize=20)
+    ax.text(x=xmax + xoff, y=ymin + ((ymax - ymin) / 2), z=zmin - zoff, s=fr'$\hat{{Y}}_{{g}}$ [m]', fontsize=20)
+    ax.text(x=xmax + xoff, y=ymin - yoff, z=zmin + ((zmax-zmin) / 2), s=fr'$\hat{{Z}}_{{g}}$ [m]', fontsize=20)
+    ax.set_title(f"3D Trajectory Control \n({mode} Mode, Global Frame, $t \in [{round(tc[idx_segs[0][0]], 2)}, {round(tc[idx_segs[-1][1]], 2)}]$ s, $K_{{d}}$ = {Kp})", fontsize=20)
+    ax.legend(loc='center left', bbox_to_anchor=(0.80, 0.5), fontsize=14)
     ax.view_init(elev=35, azim=45)
 
 #-----------------------------------------------------------------------
@@ -396,13 +421,15 @@ if plot_pos_ee:
     plt.figure(fig_count)
     fig_count += 1
 
-    mean_p_err = 0
+    p_err = []
     num_points = len(time1_trimmed)
     for i in range(num_points):
         err = np.linalg.norm(data2_trimmed[i,:] - data1_trimmed[i,:])
-        mean_p_err += err
-    mean_p_err /= num_points
-    print(f'P Mean Error: {mean_p_err}')
+        p_err.append(err)
+    mean_p_err = np.mean(p_err)
+    sd_p_err = np.std(p_err)
+    print(f'P Error Mean: {mean_p_err}')
+    print(f'P Error SD: {sd_p_err}')
     
     for i in range(3): 
         ax = plt.subplot(3, 1, i+1)
@@ -414,7 +441,7 @@ if plot_pos_ee:
         plt.legend(loc='center left', bbox_to_anchor=(0.95, 0.75))
         if i == 2:
             plt.xlabel('Time [s]')
-        plt.ylabel(fr'$\hat{axes_upper[i]}_{{ee}}$ [m]')
+        plt.ylabel(fr'$\hat{axes_upper[i]}_{{ee}}$ [mm]')
 
         max_val = max(np.max(data1_trimmed[:,i]), np.max(data2_trimmed[:,i]))*m_to_mm
         min_val = min(np.min(data1_trimmed[:,i]), np.min(data2_trimmed[:,i]))*m_to_mm
@@ -451,7 +478,7 @@ if plot_rot:
 
     labels = ['x', 'y', 'z', 'w']
 
-    mean_q_error = 0
+    q_err = []
     num_points = len(time1_trimmed)
     for i in range(num_points):
         qd = data2_trimmed[i,:]
@@ -467,9 +494,11 @@ if plot_rot:
         rvec = rerr.as_rotvec()
         err = np.linalg.norm(rvec)
 
-        mean_q_error += err
-    mean_q_error /= num_points
-    print(f'Q Mean Error: {mean_q_error}')
+        q_err.append(err)
+    mean_q_err = np.mean(q_err)
+    sd_q_err = np.std(q_err)
+    print(f'Q Error Mean: {mean_q_err}')
+    print(f'Q Error SD: {sd_q_err}')
     
     for i, comp in enumerate(labels):
         # print(i)
@@ -503,25 +532,100 @@ if plot_rot:
 # Make a plot for the switching matrix
 #-----------------------------------------------------------------------
 if plot_k_switch:
-    time1 = np.asarray(t_k_switch)
-    data1 = np.asarray(k_switch)
+    time1 = np.asarray(t_pos_c_ee)
+    data1 = np.asarray(pos_c_ee)
+    time2 = np.asarray(t_pos_d_ee)
+    data2 = np.asarray(pos_d_ee)
+    time3 = np.asarray(t_k_switch)
+    data3 = np.asarray(k_switch)
     time1_trimmed = time1[idx_start:idx_end]
     data1_trimmed = data1[idx_start:idx_end]
+    time2_trimmed = time2[idx_start:idx_end]
+    data2_trimmed = data2[idx_start:idx_end]    
+    time3_trimmed = time3[idx_start:idx_end]
+    data3_trimmed = data3[idx_start:idx_end]
+    y_tick = 2
 
-    plt.figure(fig_count, figsize=(8, 4))
+    fig = plt.figure(fig_count, figsize=(10,8))
     fig_count += 1
+
+    # mean_p_err = 0
+    # num_points = len(time1_trimmed)
+    # for i in range(num_points):
+    #     err = np.linalg.norm(data2_trimmed[i,:] - data1_trimmed[i,:])
+    #     mean_p_err += err
+    # mean_p_err /= num_points
+    # print(f'P Mean Error: {mean_p_err}')
+
+    cur_mode = h_mode[idx_start]
+    prev_mode = cur_mode
+    last_seg_start = idx_start
+    mode_segs = []
+    for i in range(idx_start, idx_end):
+        cur_mode = h_mode[i]
+        if np.any(cur_mode != prev_mode):
+            mode_segs.append((last_seg_start, i-1, prev_mode))
+            last_seg_start = i
+        prev_mode = cur_mode
+    mode_segs.append((last_seg_start, idx_end, cur_mode))
+    
+    for i in range(3): 
+        ax = plt.subplot(4, 1, i+1)
+
+        plt.plot(time1_trimmed, data1_trimmed[:,i]*m_to_mm, linewidth=linewidth, label=fr'${axes_lower[i]}_{{ee}}$')
+        plt.plot(time2_trimmed, data2_trimmed[:,i]*m_to_mm, '--', linewidth=linewidth, label=fr'${axes_lower[i]}_{{ee_d}}$')
+        if i == 0:
+            plt.title(fr'Position Trajectory Control During Hybrid Mode Switching')
+        plt.legend(loc='center left', bbox_to_anchor=(0.95, 0.75))
+        # if i == 2:
+        #     plt.xlabel('Time [s]')
+        plt.ylabel(fr'$\hat{axes_upper[i]}_{{ee}}$ [mm]')
+
+        max_val = max(np.max(data1_trimmed[:,i]), np.max(data2_trimmed[:,i]))*m_to_mm
+        min_val = min(np.min(data1_trimmed[:,i]), np.min(data2_trimmed[:,i]))*m_to_mm
+        ymin = -3 * abs(max(abs(min_val), abs(max_val)))
+        y_min_round = round(ymin / y_tick) * y_tick
+        ymax = 3 * abs(max(abs(min_val), abs(max_val)))
+        y_max_round = round(ymax / y_tick) * y_tick
+
+        # plt.yticks(np.arange(y_min_round, y_max_round, step=y_tick))
+        plt.ylim(y_min_round, y_max_round)
+        ax.yaxis.set_major_locator(MultipleLocator(abs(round(ymax / 3))))
+        for i in range(len(mode_segs)):
+            if i >= len(colors) - 1:
+                break
+            seg = mode_segs[i]
+            ax.axvspan(tc[seg[0]], tc[seg[1]], color=colors[i+1], alpha=0.2)
+        plt.grid(1)
 
     spacing = 0.01
     labels = [fr'$x$', fr'$y$', fr'$z$', fr'$\alpha$', fr'$\beta$', fr'$\gamma$']
 
+    ax = plt.subplot(4, 1, 4)
     for i in range(6):
         offset = i * spacing
-        plt.plot(time1_trimmed, data1_trimmed[:,i] + offset, linewidth=linewidth, label=labels[i])
+        plt.plot(time3_trimmed, data3_trimmed[:,i] + offset, linewidth=linewidth, label=labels[i])
 
-    plt.yticks([0, 1], ['0 = Stiffness\nDisabled', '1 = Stiffness\nEnabled'])
+    mode_labels = []
+    modes = ['Line', 'Plane', 'Circle', 'Spline']
+    for i in range(len(mode_segs)):
+        if i >= len(colors) - 1:
+            break
+        seg = mode_segs[i]
+        ax.axvspan(tc[seg[0]], tc[seg[1]], color=colors[i+1], alpha=0.2)
+        for j in range(len(seg[2])):
+            if seg[2][j] == 1:
+                break
+        tmp = Patch(color=colors[i+1], alpha=0.3, label=f'{modes[j]} Mode')
+        mode_labels.append(tmp)
+
+    ax.set_yticks([0, 1])
+    ax.set_yticklabels(['0 = Stiffness\nDisabled', '1 = Stiffness\nEnabled'])
+    # plt.yticks([0, 1], ['0 = Stiffness\nDisabled', '1 = Stiffness\nEnabled'])
     plt.xlabel('Time [s]')
-    plt.title(fr'$K_{{switch}}$ Values vs Time')
-    plt.legend(loc='center left', bbox_to_anchor=(0.95, 0.75))
+    # plt.title(fr'$K_{{switch}}$ Values vs Time')
+    plt.legend(loc='center left', bbox_to_anchor=(0.95, 0.5), fontsize='small')
+    fig.legend(handles=mode_labels, loc='upper center', bbox_to_anchor=(0.5, 1.0), ncol=2)
 
 plt.show(block=False)
 

@@ -960,6 +960,11 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
         }
     }
     k_switch_pub_.publish(k_switch_final);
+
+    // Always publish the current hybrid mode
+    std_msgs::UInt8MultiArray hybrid_mode;
+    hybrid_mode.data = hybrid_mode_list;
+    hybrid_mode_pub_.publish(hybrid_mode);
 }
 
 void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
@@ -1031,10 +1036,10 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
         }
     }
 
-    // Always publish the current hybrid mode
-    std_msgs::UInt8MultiArray hybrid_mode;
-    hybrid_mode.data = hybrid_mode_list;
-    hybrid_mode_pub_.publish(hybrid_mode);
+    // // Always publish the current hybrid mode
+    // std_msgs::UInt8MultiArray hybrid_mode;
+    // hybrid_mode.data = hybrid_mode_list;
+    // hybrid_mode_pub_.publish(hybrid_mode);
 }
 
 void ForceSensorPublisher(const geometry_msgs::WrenchStamped::ConstPtr &forceSensorPtr_)
