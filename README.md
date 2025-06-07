@@ -1,22 +1,29 @@
 # cobot
-Repo for cobot research using C++ and Python. The current setup only works for Ubuntu 16.04 LTS and ROS Kinetic. 
-We are planning to extend this work for Ubuntu 18.04 and ROS Melodic.
+Repo for cobot research using C++ and Python. The current setup works for Ubuntu 20.04 LTS and ROS noetic. Using any other configuration may or may not require changes to the codebase.
 
 ## Dependencies
 Install the following packages before clonning this repo.
 ```
 sudo apt update
-sudo apt install ros-melodic-effort-controllers ros-melodic-joint-state-controller ros-melodic-kdl-parser libeigen3-dev ros-melodic-joy
+sudo apt install ros-noetic-effort-controllers ros-noetic-joint-state-controller ros-noetic-kdl-parser libeigen3-dev ros-noetic-joy
 ```
+Running this project also requires successful installations of both libfranka and franka_ros. Carefully follow these [instructions](https://frankaemika.github.io/docs/installation_linux.html) to install these packages. 
+
+**Note:** When setting up the real-time kernel for libfranka, the instructions recommend choosing the version closest to the one you currently use. I have experienced extreme difficulty with this method, and I strongly recommend simply choosing the version that was tested with Ubuntu 20.04 (or whichever version of Ubuntu you are using). The tested versions are provided in the tutorial.
+
 ## Build Instructions
 
 ```
 mkdir -p catkin_ws/src
 cd catkin_ws/src
-git clone https://github.com/danoponline/cobot.git
+git clone https://github.com/jackninteman/Cobot-Research.git
 cd ..
 ```
-If you want to only compile this package,
+If you want to only compile this package, you must first compile the `space_manipulation` package,
+```
+catkin_make --only-pkg-with-deps space_manipulation
+```
+then you may compile the `cobot` package,
 ```
 catkin_make --only-pkg-with-deps cobot
 ```
@@ -24,6 +31,8 @@ otherwise, compile everything in the catkin workspace,
 ```
 catkin_make
 ```
+If you choose to compile everything, you may experience errors due to dependencies, and you may need to compile `space_manipulation` separately in order to get the entire package to compile successfully.
+
 ## Launch Project
 ```
 roslaunch franka_gazebo franka_gazebo.launch
