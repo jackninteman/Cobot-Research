@@ -15,7 +15,7 @@ plt.rcParams["figure.figsize"] = (6.4*1.5, 4.8*1.5)
 plt.get_backend()
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-file = 'real/spline_kd600_60.bag'
+file = 'real/hybrid.bag'
 bag = rosbag.Bag(f'/home/rsl/catkin_ws/capstone_figures/data/{file}')
 
 # Initialize some empty lists for storing the data
@@ -33,17 +33,17 @@ plot_f_ext = False
 plot_pos_ee = False
 plot_pos = False
 plot_rot = False
-plot_k_switch = False
+plot_k_switch = True
 
-# ttmp = []
-# for topic, msg, t in bag.read_messages(topics=['/hybrid_mode']):
-#     ttmp.append(t.to_sec())
-#     if isinstance(msg.data, bytes):
-#         tmp = np.frombuffer(msg.data, dtype=np.uint8)
-#     else:
-#         tmp = np.array(msg.data, dtype=np.uint8)
-#     h_mode.append(tmp)
-# t_mode = [tt - ttmp[0] for tt in ttmp]
+ttmp = []
+for topic, msg, t in bag.read_messages(topics=['/hybrid_mode']):
+    ttmp.append(t.to_sec())
+    if isinstance(msg.data, bytes):
+        tmp = np.frombuffer(msg.data, dtype=np.uint8)
+    else:
+        tmp = np.array(msg.data, dtype=np.uint8)
+    h_mode.append(tmp)
+t_mode = [tt - ttmp[0] for tt in ttmp]
 ttmp = []
 for topic,msg,t in bag.read_messages(topics=['/pose']):
     ttmp.append(t.to_sec())
@@ -326,7 +326,7 @@ if plot_pos:
         ax.text(x=xmin + ((xmax - xmin) / 2), y=ymax + yoff, z=zmin - zoff, s=fr'$\hat{{X}}_{{g}}$ [m]', fontsize=20)
         ax.text(x=xmax + xoff, y=ymin + ((ymax - ymin) / 2), z=zmin - zoff, s=fr'$\hat{{Y}}_{{g}}$ [m]', fontsize=20)
         ax.text(x=xmax + (xoff * zoffset), y=ymin - yoff, z=zmin + ((zmax-zmin) / 2), s=fr'$\hat{{Z}}_{{g}}$ [m]', fontsize=20)
-        ax.set_title(f"3D Trajectory Control \n({mode} Mode, Global Frame, $t \in t_{{{i+1}}}$, $K_{{d}}$ = {Kp})", fontsize=20)
+        ax.set_title(f"3D Position Trajectory Tracking ($t \in t_{{{i+1}}}$)", fontsize=30)
         ax.legend(loc='center left', bbox_to_anchor=(0.80, 0.5), fontsize=14)
         ax.view_init(elev=35, azim=45)
 
@@ -371,7 +371,7 @@ if plot_pos:
     ax.text(x=xmin + ((xmax - xmin) / 2), y=ymax + yoff, z=zmin - zoff, s=fr'$\hat{{X}}_{{g}}$ [m]', fontsize=20)
     ax.text(x=xmax + xoff, y=ymin + ((ymax - ymin) / 2), z=zmin - zoff, s=fr'$\hat{{Y}}_{{g}}$ [m]', fontsize=20)
     ax.text(x=xmax + (xoff * zoffset), y=ymin - yoff, z=zmin + ((zmax-zmin) / 2), s=fr'$\hat{{Z}}_{{g}}$ [m]', fontsize=20)
-    ax.set_title(f"3D Trajectory Control \n({mode} Mode, Global Frame, $t \in t_{{f}}$, $K_{{d}}$ = {Kp})", fontsize=20)
+    ax.set_title(f"3D Position Trajectory Tracking ($t \in t_{{f}}$)", fontsize=30)
     ax.legend(loc='center left', bbox_to_anchor=(0.80, 0.5), fontsize=14)
     ax.view_init(elev=35, azim=45)
 
@@ -392,7 +392,7 @@ if plot_f_ext:
 
         plt.plot(time1_trimmed, data1_trimmed[:,i], linewidth=linewidth)#, label=fr'$F_{{{axes_lower[i]}_ee}}$')
         if i == 0:
-            plt.title(f'External Force Applied at the End Effector')
+            plt.title(f'External Force Applied at the End Effector Over Time')
         # plt.legend(loc='best')
         if i == 2:
             plt.xlabel('Time [s]')
@@ -445,7 +445,7 @@ if plot_pos_ee:
         plt.plot(time1_trimmed, data1_trimmed[:,i]*m_to_mm, linewidth=linewidth, label=fr'${axes_lower[i]}_{{ee}}$')
         plt.plot(time2_trimmed, data2_trimmed[:,i]*m_to_mm, '--', linewidth=linewidth, label=fr'${axes_lower[i]}_{{ee_d}}$')
         if i == 0:
-            plt.title(fr'Position Trajectory Control ({mode} Mode, $K_{{d}}$ = {Kp})')
+            plt.title(fr'Position Trajectory Tracking Over Time (End-Effector Frame)')
         plt.legend(loc='center left', bbox_to_anchor=(0.95, 0.75))
         if i == 2:
             plt.xlabel('Time [s]')
@@ -528,7 +528,7 @@ if plot_rot:
 
         plt.ylabel(fr'$q_{{{comp}}}$')
         if i == 0:
-            plt.title(f"Quaternion Trajectory Control ({mode} Mode, Global Frame, $K_{{d}}$ = {Kr})")
+            plt.title(f"Quaternion Trajectory Tracking Over Time (Global Frame)")
         if i == 3:
             plt.xlabel("Time [s]")
         plt.legend(loc='center left', bbox_to_anchor=(0.95, 0.75))
@@ -593,7 +593,7 @@ if plot_k_switch:
         plt.plot(time1_trimmed, data1_trimmed[:,i]*m_to_mm, linewidth=linewidth, label=fr'${axes_lower[i]}_{{ee}}$')
         plt.plot(time2_trimmed, data2_trimmed[:,i]*m_to_mm, '--', linewidth=linewidth, label=fr'${axes_lower[i]}_{{ee_d}}$')
         if i == 0:
-            plt.title(fr'Position Trajectory Control During Hybrid Mode Switching')
+            plt.title(fr'Position Trajectory Tracking During Hybrid Mode Switching')
         plt.legend(loc='center left', bbox_to_anchor=(0.95, 0.75))
         # if i == 2:
         #     plt.xlabel('Time [s]')
