@@ -31,7 +31,7 @@ h_mode, t_mode = [], []
 
 plot_f_ext = False
 plot_pos_ee = False
-plot_pos = True
+plot_pos = False
 plot_rot = False
 plot_k_switch = False
 
@@ -286,7 +286,8 @@ if plot_pos:
     #-------------------------------------------------------------------
     # Make individual plots for all segments
     #-------------------------------------------------------------------
-    for seg in idx_segs:
+    for i in range(len(idx_segs)):
+        seg = idx_segs[i]
         fig = plt.figure(fig_count)
         fig_count += 1
         ax = fig.add_subplot(111, projection='3d')
@@ -312,6 +313,7 @@ if plot_pos:
 
         # Axis labels
         offset = 0.25
+        zoffset = 1.15
         xmin = ax.get_xlim3d()[0]
         xmax = ax.get_xlim3d()[1]
         xoff = (xmax - xmin) * offset
@@ -323,8 +325,8 @@ if plot_pos:
         zoff = (zmax - zmin) * offset
         ax.text(x=xmin + ((xmax - xmin) / 2), y=ymax + yoff, z=zmin - zoff, s=fr'$\hat{{X}}_{{g}}$ [m]', fontsize=20)
         ax.text(x=xmax + xoff, y=ymin + ((ymax - ymin) / 2), z=zmin - zoff, s=fr'$\hat{{Y}}_{{g}}$ [m]', fontsize=20)
-        ax.text(x=xmax + xoff, y=ymin - yoff, z=zmin + ((zmax-zmin) / 2), s=fr'$\hat{{Z}}_{{g}}$ [m]', fontsize=20)
-        ax.set_title(f"3D Trajectory Control \n({mode} Mode, Global Frame, $t \in [{round(tc[seg[0]], 2)}, {round(tc[seg[1]], 2)}]$ s, $K_{{d}}$ = {Kp})", fontsize=20)
+        ax.text(x=xmax + (xoff * zoffset), y=ymin - yoff, z=zmin + ((zmax-zmin) / 2), s=fr'$\hat{{Z}}_{{g}}$ [m]', fontsize=20)
+        ax.set_title(f"3D Trajectory Control \n({mode} Mode, Global Frame, $t \in t_{{{i+1}}}$, $K_{{d}}$ = {Kp})", fontsize=20)
         ax.legend(loc='center left', bbox_to_anchor=(0.80, 0.5), fontsize=14)
         ax.view_init(elev=35, azim=45)
 
@@ -356,6 +358,7 @@ if plot_pos:
 
     # Axis labels
     offset = 0.25
+    zoffset = 1.15
     xmin = ax.get_xlim3d()[0]
     xmax = ax.get_xlim3d()[1]
     xoff = (xmax - xmin) * offset
@@ -367,8 +370,8 @@ if plot_pos:
     zoff = (zmax - zmin) * offset
     ax.text(x=xmin + ((xmax - xmin) / 2), y=ymax + yoff, z=zmin - zoff, s=fr'$\hat{{X}}_{{g}}$ [m]', fontsize=20)
     ax.text(x=xmax + xoff, y=ymin + ((ymax - ymin) / 2), z=zmin - zoff, s=fr'$\hat{{Y}}_{{g}}$ [m]', fontsize=20)
-    ax.text(x=xmax + xoff, y=ymin - yoff, z=zmin + ((zmax-zmin) / 2), s=fr'$\hat{{Z}}_{{g}}$ [m]', fontsize=20)
-    ax.set_title(f"3D Trajectory Control \n({mode} Mode, Global Frame, $t \in [{round(tc[idx_segs[0][0]], 2)}, {round(tc[idx_segs[-1][1]], 2)}]$ s, $K_{{d}}$ = {Kp})", fontsize=20)
+    ax.text(x=xmax + (xoff * zoffset), y=ymin - yoff, z=zmin + ((zmax-zmin) / 2), s=fr'$\hat{{Z}}_{{g}}$ [m]', fontsize=20)
+    ax.set_title(f"3D Trajectory Control \n({mode} Mode, Global Frame, $t \in t_{{f}}$, $K_{{d}}$ = {Kp})", fontsize=20)
     ax.legend(loc='center left', bbox_to_anchor=(0.80, 0.5), fontsize=14)
     ax.view_init(elev=35, azim=45)
 
@@ -381,7 +384,7 @@ if plot_f_ext:
     time1_trimmed = time1[idx_start:idx_end]
     data1_trimmed = data1[idx_start:idx_end]
 
-    plt.figure(fig_count)
+    fig = plt.figure(fig_count, figsize=(10,8))
     fig_count += 1
     
     for i in range(3):
@@ -397,11 +400,16 @@ if plot_f_ext:
 
         max_val = np.max(data1_trimmed[:,i])
         min_val = np.min(data1_trimmed[:,i])
+        time_labels = []
         for i in range(len(idx_segs)):
             if i >= len(colors) - 1:
                 break
             seg = idx_segs[i]
             ax.axvspan(tc[seg[0]], tc[seg[1]], color=colors[i+1], alpha=0.2)
+            tmp = Patch(color=colors[i+1], alpha=0.3, label=f'$t_{{{i+1}}}$')
+            time_labels.append(tmp)
+
+        fig.legend(handles=time_labels, loc='upper center', bbox_to_anchor=(0.5, 1.0), ncol=2)
         plt.grid(1)
 
 #-----------------------------------------------------------------------
@@ -418,7 +426,7 @@ if plot_pos_ee:
     data2_trimmed = data2[idx_start:idx_end]
     y_tick = 2
 
-    plt.figure(fig_count)
+    fig = plt.figure(fig_count, figsize=(10,8))
     fig_count += 1
 
     p_err = []
@@ -453,11 +461,16 @@ if plot_pos_ee:
         # plt.yticks(np.arange(y_min_round, y_max_round, step=y_tick))
         plt.ylim(y_min_round, y_max_round)
         ax.yaxis.set_major_locator(MultipleLocator(abs(round(ymax / 3))))
+        time_labels = []
         for i in range(len(idx_segs)):
             if i >= len(colors) - 1:
                 break
             seg = idx_segs[i]
             ax.axvspan(tc[seg[0]], tc[seg[1]], color=colors[i+1], alpha=0.2)
+            tmp = Patch(color=colors[i+1], alpha=0.3, label=f'$t_{{{i+1}}}$')
+            time_labels.append(tmp)
+
+        fig.legend(handles=time_labels, loc='upper center', bbox_to_anchor=(0.5, 1.0), ncol=2)
         plt.grid(1)
 
 #-----------------------------------------------------------------------
@@ -473,7 +486,7 @@ if plot_rot:
     time2_trimmed = time2[idx_start:idx_end]
     data2_trimmed = data2[idx_start:idx_end]
 
-    plt.figure(fig_count)
+    fig = plt.figure(fig_count, figsize=(10,8))
     fig_count += 1
 
     labels = ['x', 'y', 'z', 'w']
@@ -522,11 +535,16 @@ if plot_rot:
         plt.grid(1)
         plt.ylim(ymin, ymax)
         ax.yaxis.set_major_locator(MultipleLocator(abs((ymax - mean) / 2)))
+        time_labels = []
         for i in range(len(idx_segs)):
             if i >= len(colors) - 1:
                 break
             seg = idx_segs[i]
             ax.axvspan(tc[seg[0]], tc[seg[1]], color=colors[i+1], alpha=0.2)
+            tmp = Patch(color=colors[i+1], alpha=0.3, label=f'$t_{{{i+1}}}$')
+            time_labels.append(tmp)
+
+        fig.legend(handles=time_labels, loc='upper center', bbox_to_anchor=(0.5, 1.0), ncol=2)
 
 #-----------------------------------------------------------------------
 # Make a plot for the switching matrix
