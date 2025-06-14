@@ -19,11 +19,7 @@ cd catkin_ws/src
 git clone https://github.com/jackninteman/Cobot-Research.git
 cd ..
 ```
-If you want to only compile this package, you must first compile the `space_manipulation` package,
-```
-catkin_make --only-pkg-with-deps space_manipulation
-```
-then you may compile the `cobot` package,
+If you want to only compile this package, use the following command,
 ```
 catkin_make --only-pkg-with-deps cobot
 ```
@@ -33,7 +29,12 @@ catkin_make
 ```
 If you choose to compile everything, you may experience errors due to dependencies, and you may need to compile `space_manipulation` separately in order to get the entire package to compile successfully.
 
-## Launch Project
+## Launch Project (Simulation)
 ```
 roslaunch franka_gazebo franka_gazebo.launch
+```
+
+## Launch Project (Experimental)
+```
+roslaunch cobot_experimental_controller panda_cobot_controller.launch robot_ip:=<robot ip address> load_gripper:=true robot:=panda
 ```
