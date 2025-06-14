@@ -27,12 +27,12 @@ otherwise, compile everything in the catkin workspace,
 ```
 catkin_make
 ```
-If you choose to compile everything, you may experience errors due to dependencies, and you may need to compile `space_manipulation` separately in order to get the entire package to compile successfully.
 
 ## Launch Project (Simulation)
 ```
 roslaunch franka_gazebo franka_gazebo.launch
 ```
+**Note:** When you install `franka_ros` it will include its own `franka_gazebo` package. Since we are using a modified version of this package, you will need to remove the `franka_gazebo` folder from the `franka_ros` directory in order to successfully build your workspace. I would recommend keeping a copy of the original `franka_gazebo` package that you removed from `franka_ros`.
 
 ## Launch Project (Experimental)
 ```
