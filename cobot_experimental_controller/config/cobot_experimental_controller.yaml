@@ -1,5 +1,5 @@
 panda_cobot_controller:
-   type: cobot_experimental_controller/PandaCobotController
+   type: franka_example_controllers/PandaCobotController
    arm_id: panda
    joint_names:
        - panda_joint1

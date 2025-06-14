@@ -27,7 +27,6 @@
   <exec_depend>joint_state_publisher</exec_depend>
   <exec_depend>joint_trajectory_controller</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
-  <exec_depend>space_manipulation</exec_depend>
   
   <exec_depend>line_manipulation_control_law_publisher</exec_depend>
   <exec_depend>franka_description_gazebo</exec_depend>
