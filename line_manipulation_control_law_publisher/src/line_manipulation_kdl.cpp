@@ -110,7 +110,7 @@ double time_begin_in_sec;
 Eigen::Vector3d begin_cartesian_position;
 
 std::vector<uint8_t> hybrid_mode_list = DEFAULT_MODE;
-int desired_mode_idx = 0;
+int desired_mode_idx = LINE_MODE_IDX;
 
 // Parameters----------------------------------------------------------
 #ifdef HYBRID
@@ -800,7 +800,8 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     }
 
     //-------------Compute total control law------------------------------------------------------------------
-    tau_d = tau_d + tau_null;
+    // Optionally add the null space command torques here
+    tau_d = tau_d; // + tau_null;
 
     //-------------For debugging only-------------------------------------------------------------------------
     // std::cout << "C_des:" << std::endl << C_des << std::endl;
@@ -1006,22 +1007,22 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
     if (buttonA)
     {
         // LINE
-        desired_mode_idx = 0;
+        desired_mode_idx = LINE_MODE_IDX;
     }
     else if (buttonB)
     {
         // PLANE
-        desired_mode_idx = 1;
+        desired_mode_idx = PLANE_MODE_IDX;
     }
     else if (buttonY)
     {
         // CIRCLE
-        desired_mode_idx = 2;
+        desired_mode_idx = CIRCLE_MODE_IDX;
     }
     else if (buttonX)
     {
         // SPLINE
-        desired_mode_idx = 3;
+        desired_mode_idx = SPLINE_MODE_IDX;
     }
     // Update hybrid mode list based on button inputs
     for (int i = 0; i < NUM_MODES; i++)
@@ -1036,10 +1037,10 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
         }
     }
 
-    // // Always publish the current hybrid mode
-    // std_msgs::UInt8MultiArray hybrid_mode;
-    // hybrid_mode.data = hybrid_mode_list;
-    // hybrid_mode_pub_.publish(hybrid_mode);
+    // Always publish the current hybrid mode
+    std_msgs::UInt8MultiArray hybrid_mode;
+    hybrid_mode.data = hybrid_mode_list;
+    hybrid_mode_pub_.publish(hybrid_mode);
 }
 
 void ForceSensorPublisher(const geometry_msgs::WrenchStamped::ConstPtr &forceSensorPtr_)

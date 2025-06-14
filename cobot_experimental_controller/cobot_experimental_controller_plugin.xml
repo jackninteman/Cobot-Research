@@ -1,0 +1,7 @@
+<library path="lib/libcobot_experimental_controller">
+  <class name="cobot_experimental_controller/PandaCobotController" type="cobot_experimental_controller::PandaCobotController" base_class_type="controller_interface::ControllerBase">
+   <description>
+     For cobot research.
+   </description>
+  </class>
+</library>
