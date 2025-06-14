@@ -311,7 +311,8 @@ int main(int argc, char **argv)
         mode_text.text = "LINE MODE";
         marker_pub.publish(mode_text);
         marker_pub.publish(line_strip);
-        marker_pub.publish(points);
+        // Optionally display the user defined points
+        // marker_pub.publish(points);
       }
       else if (hybrid_mode_list[PLANE_MODE_IDX])
       {
@@ -347,7 +348,8 @@ int main(int argc, char **argv)
         mode_text.text = "PLANE MODE";
         marker_pub.publish(mode_text);
         marker_pub.publish(plane);
-        marker_pub.publish(points);
+        // Optionally display the user defined points
+        // marker_pub.publish(points);
       }
       else if (hybrid_mode_list[CIRCLE_MODE_IDX])
       {
@@ -394,7 +396,8 @@ int main(int argc, char **argv)
         mode_text.text = "SPLINE MODE";
         marker_pub.publish(mode_text);
         marker_pub.publish(spline);
-        marker_pub.publish(points);
+        // Optionally display the user defined points
+        // marker_pub.publish(points);
       }
     }
     else
