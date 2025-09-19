@@ -15,28 +15,34 @@ Spline3d::Spline3d(std::vector<Eigen::Vector3d> sample_points)
 
 void Spline3d::FindDesiredSplinePoint(Eigen::Vector3d current_position)
 {
-    Eigen::Vector3d p = current_position;
-
-    double min_dist = std::numeric_limits<double>::max();
-    double bestT = 0.0;
-    Eigen::Vector3d s;
-
-    for (double t = 0; t <= 1; t += 0.001)
+    auto f = [&](double t)
     {
-        s = spline(t);
-        // tangent = spline.derivatives(t, 1).col(1);
+        Eigen::Vector3d p = spline(t);
+        return (p - current_position).squaredNorm();
+    };
 
-        double dist = sqrt(pow(p.x() - s.x(), 2) + pow(p.y() - s.y(), 2) + pow(p.z() - s.z(), 2));
+    const double phi = 0.6180339887498949;
+    double a = 0, b = 1;
+    // compute initial guesses using phi
+    double c = b - phi * (b - a);
+    double d = a + phi * (b - a);
 
-        if (dist < min_dist)
-        {
-            min_dist = dist;
-            bestSplinePoint = s;
-            bestT = t;
-            // bestTangent = tangent;
-        }
+    // continuously update guesses until the difference is within the specified tolerance
+    double tol = 1e-6;
+    while (std::abs(c - d) > tol)
+    {
+        if (f(c) < f(d))
+            b = d;
+        else
+            a = c;
+
+        c = b - phi * (b - a);
+        d = a + phi * (b - a);
     }
 
+    // Use the calculated "best t" to compute position and derivative of the spline
+    double bestT = 0.5 * (a + b);
+    bestSplinePoint = spline(bestT);
     bestTangent = spline.derivatives(bestT, 1).col(1);
 }
 
