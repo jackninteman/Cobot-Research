@@ -1,7 +1,7 @@
 // Copyright (c) 2020 Franka Emika GmbH
 // Use of this source code is governed by the Apache-2.0 license, see LICENSE
 #include <franka/gripper.h>
-#include <franka_example_controllers/teleop_gripper_paramConfig.h>
+#include <cobot_experimental_controller/teleop_gripper_paramConfig.h>
 #include <franka_gripper/GraspAction.h>
 #include <franka_gripper/HomingAction.h>
 #include <franka_gripper/MoveAction.h>
@@ -58,7 +58,7 @@ public:
     dynamic_reconfigure_teleop_gripper_param_node_ =
         ros::NodeHandle("dyn_reconf_teleop_gripper_param_node");
     dynamic_server_teleop_gripper_param_ = std::make_unique<
-        dynamic_reconfigure::Server<franka_example_controllers::teleop_gripper_paramConfig>>(
+        dynamic_reconfigure::Server<cobot_experimental_controller::teleop_gripper_paramConfig>>(
         dynamic_reconfigure_teleop_gripper_param_node_);
     dynamic_server_teleop_gripper_param_->setCallback(
         boost::bind(&TeleopGripperClient::teleopGripperParamCallback, this, _1, _2));
@@ -120,11 +120,11 @@ private:
   std::mutex dynamic_reconfigure_mutex_;
   ros::NodeHandle dynamic_reconfigure_teleop_gripper_param_node_;
   std::unique_ptr<
-      dynamic_reconfigure::Server<franka_example_controllers::teleop_gripper_paramConfig>>
+      dynamic_reconfigure::Server<cobot_experimental_controller::teleop_gripper_paramConfig>>
       dynamic_server_teleop_gripper_param_;
 
   void teleopGripperParamCallback(
-      const franka_example_controllers::teleop_gripper_paramConfig &config,
+      const cobot_experimental_controller::teleop_gripper_paramConfig &config,
       uint32_t /*level*/)
   {
     if (dynamic_reconfigure_mutex_.try_lock())

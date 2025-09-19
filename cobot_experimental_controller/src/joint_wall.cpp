@@ -1,5 +1,5 @@
 // Copyright (c) 2022 Franka Emika GmbH
-#include <franka_example_controllers/joint_wall.h>
+#include <cobot_experimental_controller/joint_wall.h>
 
 #include <ros/ros.h>
 
@@ -7,7 +7,7 @@
 #include <iostream>
 #include <sstream>
 
-namespace franka_example_controllers
+namespace cobot_experimental_controller
 {
 
   JointWall::JointWall(const double soft_upper_joint_position_limit,

@@ -16,16 +16,16 @@
   <include file="$(find franka_control)/launch/franka_combined_control.launch">
     <arg name="robot_id" value="$(arg robot_id)" />
     <arg name="robot_ips" value="{leader/robot_ip: $(arg leader_ip), follower/robot_ip: $(arg follower_ip)}" />
-    <arg name="hw_config_file" value="$(find franka_example_controllers)/config/teleop_joint_pd_example_control_node.yaml" />
+    <arg name="hw_config_file" value="$(find cobot_experimental_controller)/config/teleop_joint_pd_example_control_node.yaml" />
     <arg name="robot" value="$(find franka_description)/robots/dual_panda_example.urdf.xacro" />
     <arg name="args" value="arm_id_1:=leader arm_id_2:=follower" />
-    <arg name="controllers_file" value="$(find franka_example_controllers)/config/teleop_state_controllers.yaml" />
+    <arg name="controllers_file" value="$(find cobot_experimental_controller)/config/teleop_state_controllers.yaml" />
     <arg name="controllers_to_start" value="leader_state_controller follower_state_controller" />
     <arg name="joint_states_source_list" value="[leader_state_controller/joint_states, follower_state_controller/joint_states, leader/franka_gripper/joint_states, follower/franka_gripper/joint_states]" />
   </include>
 
   <group ns="$(arg robot_id)">
-    <include file="$(find franka_example_controllers)/launch/teleop_gripper.launch" if="$(arg load_gripper)">
+    <include file="$(find cobot_experimental_controller)/launch/teleop_gripper.launch" if="$(arg load_gripper)">
       <arg name="leader_ip" value="$(arg leader_ip)" />
       <arg name="follower_ip" value="$(arg follower_ip)" />
       <arg name="leader_id" value="leader" />
@@ -33,12 +33,12 @@
       <arg name="gripper_homed" value="$(arg gripper_homed)" />
     </include>
 
-    <rosparam command="load" file="$(find franka_example_controllers)/config/franka_example_controllers.yaml" />
+    <rosparam command="load" file="$(find cobot_experimental_controller)/config/cobot_experimental_controller.yaml" />
     <rosparam param="teleop_joint_pd_example_controller/debug" subst_value="true">$(arg debug)</rosparam>
     <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="teleop_joint_pd_example_controller" />
 
     <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" required="false" if="$(eval arg('debug') or arg('load_gripper'))" />
 
-    <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find franka_example_controllers)/launch/rviz/teleop_joint_pd_example.rviz" if="$(arg rviz)" />
+    <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find cobot_experimental_controller)/launch/rviz/teleop_joint_pd_example.rviz" if="$(arg rviz)" />
   </group>
 </launch>

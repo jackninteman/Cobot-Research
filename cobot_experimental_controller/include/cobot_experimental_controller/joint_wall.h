@@ -16,7 +16,7 @@
 */
 // clang-format on
 
-namespace franka_example_controllers
+namespace cobot_experimental_controller
 {
 
   /// A class that offers an implementation of a virtual wall for a single joint.

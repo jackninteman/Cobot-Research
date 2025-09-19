@@ -1,6 +1,6 @@
 // Copyright (c) 2017 Franka Emika GmbH
 // Use of this source code is governed by the Apache-2.0 license, see LICENSE
-#include <franka_example_controllers/panda_cobot_controller.h>
+#include <cobot_experimental_controller/panda_cobot_controller.h>
 
 #include <cmath>
 #include <memory>
@@ -15,29 +15,31 @@
 #include <space_manipulation/circle3d.h>
 #include <space_manipulation/line3d.h>
 #include <space_manipulation/plane3d.h>
-#include "franka_example_controllers/pseudo_inversion.h"
+#include "cobot_experimental_controller/pseudo_inversion.h"
 #include "space_manipulation/spline3d.h"
 #include "std_msgs/UInt8MultiArray.h"
 
 #include <sensor_msgs/Joy.h>
 #include <Eigen/Geometry>
 
-namespace franka_example_controllers
+namespace cobot_experimental_controller
 {
 
   // Points for line and plane
-  Eigen::Vector3d p_1{0.5, -0.25, 0.15};
-  Eigen::Vector3d p_2{0.4, 0.25, 0.3};
-  Eigen::Vector3d p_3{0.5, 0.0, 0.305};
+  Eigen::Vector3d p_1(0.5, -0.25, 0.15);
+  Eigen::Vector3d p_2(0.4, 0.25, 0.3);
+  Eigen::Vector3d p_3(0.55, 0.0, 0.25);
   // Points for circle
-  Eigen::Vector3d p_c1{0.38, 0.25, 0.5};
-  Eigen::Vector3d p_c2{0.35, 0.0, 0.75};
-  Eigen::Vector3d p_cc{0.4, 0.0, 0.5};
+  Eigen::Vector3d p_c1(0.38, 0.25, 0.5);
+  Eigen::Vector3d p_c2(0.35, 0.0, 0.75);
+  Eigen::Vector3d p_cc(0.4, 0.0, 0.5);
   // Points for spline
   // You can define any number of points here
   std::vector<Eigen::Vector3d> spline_points = {
-      Eigen::Vector3d(0.6, -0.5, 0.1), Eigen::Vector3d(0.5, -0.25, 0.25),
-      Eigen::Vector3d(0.6, 0.2, 0.3), Eigen::Vector3d(0.5, 0.5, 0.5),
+      Eigen::Vector3d(0.6, -0.5, 0.1),
+      Eigen::Vector3d(0.5, -0.25, 0.25),
+      Eigen::Vector3d(0.6, 0.2, 0.3),
+      Eigen::Vector3d(0.5, 0.5, 0.5),
       Eigen::Vector3d(0.6, 0.75, 0.6)};
 
 // 2) Choose line or plane or circle objects
@@ -783,5 +785,5 @@ namespace franka_example_controllers
 
 } // namespace franka_example_controllers
 
-PLUGINLIB_EXPORT_CLASS(franka_example_controllers::PandaCobotController,
+PLUGINLIB_EXPORT_CLASS(cobot_experimental_controller::PandaCobotController,
                        controller_interface::ControllerBase)

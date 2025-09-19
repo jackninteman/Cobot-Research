@@ -91,7 +91,7 @@ Eigen::Vector3d ext_force_joystick;
 // Points for line and plane
 Eigen::Vector3d p_1(0.5, -0.25, 0.15);
 Eigen::Vector3d p_2(0.4, 0.25, 0.3);
-Eigen::Vector3d p_3(0.5, 0.0, 0.305);
+Eigen::Vector3d p_3(0.55, 0.0, 0.25);
 // Points for circle
 Eigen::Vector3d p_c1(0.38, 0.25, 0.5);
 Eigen::Vector3d p_c2(0.35, 0.0, 0.75);

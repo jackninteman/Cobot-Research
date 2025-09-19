@@ -1,7 +1,7 @@
 // Copyright (c) 2020 Franka Emika GmbH
 // Use of this source code is governed by the Apache-2.0 license, see LICENSE
-#include <franka_example_controllers/joint_wall.h>
-#include <franka_example_controllers/teleop_joint_pd_example_controller.h>
+#include <cobot_experimental_controller/joint_wall.h>
+#include <cobot_experimental_controller/teleop_joint_pd_example_controller.h>
 
 #include <hardware_interface/hardware_interface.h>
 #include <joint_limits_interface/joint_limits_urdf.h>
@@ -20,7 +20,7 @@ using Vector7d = Eigen::Matrix<double, 7, 1>;
 
 const std::string kControllerName = "TeleopJointPDExampleController";
 
-namespace franka_example_controllers
+namespace cobot_experimental_controller
 {
 
   bool TeleopJointPDExampleController::init(hardware_interface::RobotHW *robot_hw,
@@ -79,7 +79,7 @@ namespace franka_example_controllers
       // Init for dynamic reconfigure
       dynamic_reconfigure_teleop_param_node_ = ros::NodeHandle("dyn_reconf_teleop_param_node");
       dynamic_server_teleop_param_ = std::make_unique<
-          dynamic_reconfigure::Server<franka_example_controllers::teleop_paramConfig>>(
+          dynamic_reconfigure::Server<cobot_experimental_controller::teleop_paramConfig>>(
           dynamic_reconfigure_teleop_param_node_);
       dynamic_server_teleop_param_->setCallback(
           boost::bind(&TeleopJointPDExampleController::teleopParamCallback, this, _1, _2));
@@ -417,7 +417,7 @@ namespace franka_example_controllers
   }
 
   void TeleopJointPDExampleController::teleopParamCallback(
-      franka_example_controllers::teleop_paramConfig &config,
+      cobot_experimental_controller::teleop_paramConfig &config,
       uint32_t /*level*/)
   {
     if (dynamic_reconfigure_mutex_.try_lock())
@@ -603,5 +603,5 @@ namespace franka_example_controllers
 
 } // namespace franka_example_controllers
 
-PLUGINLIB_EXPORT_CLASS(franka_example_controllers::TeleopJointPDExampleController,
+PLUGINLIB_EXPORT_CLASS(cobot_experimental_controller::TeleopJointPDExampleController,
                        controller_interface::ControllerBase)

@@ -11,7 +11,7 @@
 #include <Eigen/LU>
 #include <Eigen/SVD>
 
-namespace franka_example_controllers
+namespace cobot_experimental_controller
 {
 
   inline void pseudoInverse(const Eigen::MatrixXd &M_, Eigen::MatrixXd &M_pinv_, bool damped = true)
