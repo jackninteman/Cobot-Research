@@ -7,7 +7,7 @@ Install the following packages before clonning this repo.
 sudo apt update
 sudo apt install ros-noetic-effort-controllers ros-noetic-joint-state-controller ros-noetic-kdl-parser libeigen3-dev ros-noetic-joy
 ```
-Running this project also requires successful installations of both libfranka and franka_ros. Carefully follow these [instructions](https://frankaemika.github.io/docs/installation_linux.html) to install these packages. 
+Running this project also requires successful installations of both libfranka and franka_ros. Carefully follow the instructions provided in `docs/html/installation_linux.html` to complete the installation. 
 
 **Note:** When setting up the real-time kernel for libfranka, the instructions recommend choosing the version closest to the one you currently use. I have experienced extreme difficulty with this method, and I strongly recommend simply choosing the version that was tested with Ubuntu 20.04 (or whichever version of Ubuntu you are using). The tested versions are provided in the tutorial.
 
