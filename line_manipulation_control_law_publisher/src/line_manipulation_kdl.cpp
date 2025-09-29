@@ -196,7 +196,7 @@ int main(int argc, char **argv)
     ros_node->setParam("/p_plane_x", p_3[0]);
     ros_node->setParam("/p_plane_y", p_3[1]);
     ros_node->setParam("/p_plane_z", p_3[2]);
-    // Must flatten the spline poitns matrix so it can be set as a rosparameter
+    // Must flatten the spline points matrix so it can be set as a rosparameter
     std::vector<double> spline_points_flat;
     for (int i = 0; i < spline_points.size(); i++)
     {

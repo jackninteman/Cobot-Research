@@ -10,6 +10,7 @@
 
  <rosparam command="load" file="$(find cobot_experimental_controller)/config/cobot_experimental_controller.yaml" />
  <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="panda_cobot_controller"/>
+ <node pkg="line_manipulation_control_law_publisher" type="line_rviz_publisher_node" output="screen" name="line_rviz_publisher_node"/>
  <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find cobot_experimental_controller)/launch/rviz/franka_description_with_marker.rviz"/>
  <!--node name="interactive_marker" pkg="cobot_experimental_controller" type="interactive_marker.py" required="true" output="screen">
    <param name="link_name" value="panda_link0" />

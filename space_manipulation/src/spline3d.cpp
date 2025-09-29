@@ -65,7 +65,7 @@ visualization_msgs::Marker Spline3d::GetSplineVis()
 void Spline3d::PrepToPub()
 {
     // prepare variables for publishing
-    spline_strip.header.frame_id = "world";
+    spline_strip.header.frame_id = "panda_link0";
     spline_strip.header.stamp = ros::Time::now();
     spline_strip.ns = "points_and_lines";
     spline_strip.id = 0;

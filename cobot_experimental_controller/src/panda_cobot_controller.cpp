@@ -66,6 +66,47 @@ namespace cobot_experimental_controller
     des_pos_ee_pub_ = node_handle.advertise<geometry_msgs::Vector3>("/des_pos_ee", 1);
     k_switch_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/k_switch", 1);
     hybrid_mode_pub_ = node_handle.advertise<std_msgs::UInt8MultiArray>("/hybrid_mode", 1);
+    spline_pub = node_handle.advertise<visualization_msgs::Marker>("/spline", 1);
+
+    // Set rosparameters for line
+    node_handle.setParam("/p_initial_x", p_1[0]);
+    node_handle.setParam("/p_initial_y", p_1[1]);
+    node_handle.setParam("/p_initial_z", p_1[2]);
+    node_handle.setParam("/p_final_x", p_2[0]);
+    node_handle.setParam("/p_final_y", p_2[1]);
+    node_handle.setParam("/p_final_z", p_2[2]);
+    node_handle.setParam("/p_plane_x", p_3[0]);
+    node_handle.setParam("/p_plane_y", p_3[1]);
+    node_handle.setParam("/p_plane_z", p_3[2]);
+    // Must flatten the spline points matrix so it can be set as a rosparameter
+    std::vector<double> spline_points_flat;
+    for (int i = 0; i < spline_points.size(); i++)
+    {
+      for (int j = 0; j < 3; j++)
+      {
+        spline_points_flat.push_back(spline_points[i][j]);
+      }
+    }
+    node_handle.setParam("/spline_points", spline_points_flat);
+    // Set rosparameters for plane
+    Plane3d plane(p_1, p_2, p_3);
+    Eigen::Quaterniond plane_orientation(plane.GetPlaneUnitDirection());
+    node_handle.setParam("/plane_orientation_w", plane_orientation.w());
+    node_handle.setParam("/plane_orientation_x", plane_orientation.x());
+    node_handle.setParam("/plane_orientation_y", plane_orientation.y());
+    node_handle.setParam("/plane_orientation_z", plane_orientation.z());
+    // Set rosparameters for circle
+    node_handle.setParam("/p_center_x", p_cc[0]);
+    node_handle.setParam("/p_center_y", p_cc[1]);
+    node_handle.setParam("/p_center_z", p_cc[2]);
+    Circle3d circle(p_c1, p_c2, p_cc);
+    Eigen::MatrixXd R_circle = circle.GetRot();
+    // Must flatten the R matrix so it can be set as a rosparameter
+    std::vector<double> R_flat = {R_circle(0, 0), R_circle(0, 1), R_circle(0, 2),
+                                  R_circle(1, 0), R_circle(1, 1), R_circle(1, 2),
+                                  R_circle(2, 0), R_circle(2, 1), R_circle(2, 2)};
+    node_handle.setParam("/circle_rad", circle.GetRadius());
+    node_handle.setParam("/circle_rot", R_flat);
 
     sub_equilibrium_pose_ =
         node_handle.subscribe("/equilibrium_pose", 20, &PandaCobotController::equilibriumPoseCallback,
@@ -573,6 +614,9 @@ namespace cobot_experimental_controller
     traj.orientation.z = q_desired.z();
     traj.orientation.w = q_desired.w();
     traj_pub_.publish(traj);
+
+    // Publish Spline marker
+    spline_pub.publish(spline.GetSplineVis());
 
     // Publish a bunch of stuff to visualize results
 

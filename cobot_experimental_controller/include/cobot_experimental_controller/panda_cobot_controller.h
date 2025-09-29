@@ -91,6 +91,7 @@ namespace cobot_experimental_controller
     ros::Publisher des_pos_ee_pub_;
     ros::Publisher k_switch_pub_;
     ros::Publisher hybrid_mode_pub_;
+    ros::Publisher spline_pub;
     ros::Subscriber joystickSubscriber;
     void equilibriumPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg);
     void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_);
