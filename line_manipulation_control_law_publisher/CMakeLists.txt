@@ -13,6 +13,8 @@ find_package(catkin REQUIRED COMPONENTS
   kdl_parser
   message_filters
   space_manipulation
+  geometry_msgs
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -48,12 +50,11 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * uncomment the generate_messages entry below
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
-## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+# Generate messages in the 'msg' folder
+add_message_files(
+  FILES
+  PointArray.msg
+)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -69,11 +70,12 @@ find_package(catkin REQUIRED COMPONENTS
 #   Action2.action
 # )
 
-## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs
-# )
+# Generate added messages and services with any dependencies listed here
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  geometry_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -107,7 +109,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES line_manipulation_control_law_publisher
-#  CATKIN_DEPENDS roscpp std_msgs
+ CATKIN_DEPENDS message_runtime roscpp std_msgs geometry_msgs
 #  DEPENDS system_lib
 )
 
@@ -135,6 +137,8 @@ include_directories(include ${catkin_INCLUDE_DIRS})
 add_executable(line_manipulation_kdl_node src/line_manipulation_kdl.cpp)
 add_executable(kdl_test_node src/kdl_test.cpp)
 add_executable(line_rviz_publisher_node src/line_rviz_publisher.cpp)
+add_executable(geometry_publisher_node src/geometry_publisher.cpp)
+add_executable(user_controller_publisher_node src/user_controller_publisher.cpp)
 # add_library({PROJECT_NAME} src/line3d.cpp)
 
 ## Rename C++ executable without prefix
@@ -151,6 +155,8 @@ add_executable(line_rviz_publisher_node src/line_rviz_publisher.cpp)
 target_link_libraries(line_manipulation_kdl_node ${catkin_LIBRARIES})
 target_link_libraries(kdl_test_node ${catkin_LIBRARIES})
 target_link_libraries(line_rviz_publisher_node ${catkin_LIBRARIES})
+target_link_libraries(geometry_publisher_node ${catkin_LIBRARIES})
+target_link_libraries(user_controller_publisher_node ${catkin_LIBRARIES})
 # target_link_libraries({PROJECT_NAME} ${catkin_LIBRARIES})
 #############
 ## Install ##

@@ -39,6 +39,7 @@
 #include <ros/ros.h>
 #include <gazebo_msgs/ApplyBodyWrench.h>
 #include <visualization_msgs/Marker.h>
+#include "line_manipulation_control_law_publisher/PointArray.h"
 
 //------------------------------------------------------------------------------
 // DEFINES
@@ -59,10 +60,7 @@ ros::Publisher joint7_torque_pub_;
 ros::Publisher pose_pub_;
 ros::Publisher traj_pub_;
 ros::Publisher twist_pub_;
-ros::Publisher hybrid_mode_pub_;
 ros::Publisher matrix_pub;
-ros::Publisher spline_pub;
-ros::ServiceClient wrench_client;
 // ROS publishers for test visualization
 ros::Publisher fext_ee_pub_;
 ros::Publisher cur_pos_ee_pub_;
@@ -70,8 +68,6 @@ ros::Publisher des_pos_ee_pub_;
 ros::Publisher cur_rot_pub_;
 ros::Publisher des_rot_pub_;
 ros::Publisher k_switch_pub_;
-gazebo_msgs::ApplyBodyWrench::Request apply_wrench_req;
-gazebo_msgs::ApplyBodyWrench::Response apply_wrench_resp;
 KDL::ChainDynParam *dyn_solver_raw_;
 KDL::ChainJntToJacSolver *jac_solver_raw_;
 KDL::ChainFkSolverPos_recursive *fk_solver_raw_;
@@ -86,42 +82,38 @@ KDL::JntArray effort_;
 KDL::Frame ee_tf_;
 KDL::Frame force_frame_tf_;
 Eigen::Vector3d ext_force_body;
-Eigen::Vector3d ext_force_joystick;
+Eigen::Vector4d Fext_homogeneous;
 
 // Points for line and plane
-Eigen::Vector3d p_1(0.5, -0.25, 0.15);
-Eigen::Vector3d p_2(0.4, 0.25, 0.3);
-Eigen::Vector3d p_3(0.55, 0.0, 0.25);
+std::vector<Eigen::Vector3d> line_plane_points;
+bool line_plane_init = false;
+bool line_plane_class_init = false;
 // Points for circle
-Eigen::Vector3d p_c1(0.38, 0.25, 0.5);
-Eigen::Vector3d p_c2(0.35, 0.0, 0.75);
-Eigen::Vector3d p_cc(0.4, 0.0, 0.5);
+std::vector<Eigen::Vector3d> circle_points;
+bool circle_init = false;
+bool circle_class_init = false;
 // Points for spline
-// You can define any number of points here
-std::vector<Eigen::Vector3d> spline_points = {
-    Eigen::Vector3d(0.6, -0.5, 0.1),
-    Eigen::Vector3d(0.5, -0.25, 0.25),
-    Eigen::Vector3d(0.6, 0.2, 0.3),
-    Eigen::Vector3d(0.5, 0.5, 0.5),
-    Eigen::Vector3d(0.6, 0.75, 0.6)};
+std::vector<Eigen::Vector3d> spline_points;
+bool spline_init = false;
+bool spline_class_init = false;
 
-bool start_flag = true;
-double time_begin_in_sec;
-Eigen::Vector3d begin_cartesian_position;
+// Not sure what this was used for?
+// bool start_flag = true;
+// double time_begin_in_sec;
+// Eigen::Vector3d begin_cartesian_position;
 
 std::vector<uint8_t> hybrid_mode_list = DEFAULT_MODE;
-int desired_mode_idx = LINE_MODE_IDX;
 
 // Parameters----------------------------------------------------------
 #ifdef HYBRID
-// Setup line, plane, and circle parameters
-Line3d line(p_1, p_2);
+// Declare line, plane, circle, and spline parameters
+std::shared_ptr<Line3d> line;
 double distance_param;
-Plane3d plane(p_1, p_2, p_3);
+std::shared_ptr<Plane3d> plane;
 double distance_param_x, distance_param_y;
-Circle3d circle(p_c1, p_c2, p_cc);
+std::shared_ptr<Circle3d> circle;
 double theta_param;
-Spline3d spline(spline_points);
+std::shared_ptr<Spline3d> spline;
 #endif
 
 //------------------------------------------------------------------------------
@@ -130,13 +122,21 @@ Spline3d spline(spline_points);
 
 void publishMatrices(const Eigen::MatrixXd &S, const Eigen::MatrixXd &L);
 
-void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_);
-
 void ForceSensorPublisher(const geometry_msgs::WrenchStamped::ConstPtr &forceSensorPtr_);
 
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_);
 
 uint8_t CheckOctant(Eigen::Vector3d e_t);
+
+void fextCallback(const geometry_msgs::Point::ConstPtr &msg);
+
+void hybridModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg);
+
+void linePlaneCallback(const line_manipulation_control_law_publisher::PointArray::ConstPtr &msg);
+
+void circleCallback(const line_manipulation_control_law_publisher::PointArray::ConstPtr &msg);
+
+void splineCallback(const line_manipulation_control_law_publisher::PointArray::ConstPtr &msg);
 
 int main(int argc, char **argv)
 {
@@ -167,10 +167,6 @@ int main(int argc, char **argv)
     traj_pub_ = ros_node->advertise<geometry_msgs::Pose>("/traj", 1);
     twist_pub_ = ros_node->advertise<geometry_msgs::Twist>("/twist", 1);
 
-    hybrid_mode_pub_ = ros_node->advertise<std_msgs::UInt8MultiArray>("/hybrid_mode", 1);
-
-    spline_pub = ros_node->advertise<visualization_msgs::Marker>("/spline", 1);
-
     // Publishers for test results
     ros::Publisher fext_ee_;
     ros::Publisher cur_pos_ee;
@@ -185,46 +181,6 @@ int main(int argc, char **argv)
     cur_rot_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/cur_rot", 1);
     des_rot_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/des_rot", 1);
     k_switch_pub_ = ros_node->advertise<std_msgs::Float64MultiArray>("/k_switch", 1);
-
-    // Set rosparameters for line
-    ros_node->setParam("/p_initial_x", p_1[0]);
-    ros_node->setParam("/p_initial_y", p_1[1]);
-    ros_node->setParam("/p_initial_z", p_1[2]);
-    ros_node->setParam("/p_final_x", p_2[0]);
-    ros_node->setParam("/p_final_y", p_2[1]);
-    ros_node->setParam("/p_final_z", p_2[2]);
-    ros_node->setParam("/p_plane_x", p_3[0]);
-    ros_node->setParam("/p_plane_y", p_3[1]);
-    ros_node->setParam("/p_plane_z", p_3[2]);
-    // Must flatten the spline points matrix so it can be set as a rosparameter
-    std::vector<double> spline_points_flat;
-    for (int i = 0; i < spline_points.size(); i++)
-    {
-        for (int j = 0; j < 3; j++)
-        {
-            spline_points_flat.push_back(spline_points[i][j]);
-        }
-    }
-    ros_node->setParam("/spline_points", spline_points_flat);
-    // Set rosparameters for plane
-    Plane3d plane(p_1, p_2, p_3);
-    Eigen::Quaterniond plane_orientation(plane.GetPlaneUnitDirection());
-    ros_node->setParam("/plane_orientation_w", plane_orientation.w());
-    ros_node->setParam("/plane_orientation_x", plane_orientation.x());
-    ros_node->setParam("/plane_orientation_y", plane_orientation.y());
-    ros_node->setParam("/plane_orientation_z", plane_orientation.z());
-    // Set rosparameters for circle
-    ros_node->setParam("/p_center_x", p_cc[0]);
-    ros_node->setParam("/p_center_y", p_cc[1]);
-    ros_node->setParam("/p_center_z", p_cc[2]);
-    Circle3d circle(p_c1, p_c2, p_cc);
-    Eigen::MatrixXd R_circle = circle.GetRot();
-    // Must flatten the R matrix so it can be set as a rosparameter
-    std::vector<double> R_flat = {R_circle(0, 0), R_circle(0, 1), R_circle(0, 2),
-                                  R_circle(1, 0), R_circle(1, 1), R_circle(1, 2),
-                                  R_circle(2, 0), R_circle(2, 1), R_circle(2, 2)};
-    ros_node->setParam("/circle_rad", circle.GetRadius());
-    ros_node->setParam("/circle_rot", R_flat);
 
     // Setup subscriber to joint state controller
     // Whenever we receive actual joint states, we will use callback function above to publish desired joint states
@@ -241,13 +197,20 @@ int main(int argc, char **argv)
         "/sensor_panda_joint7", 1, ForceSensorPublisher, ros::VoidPtr(), ros_node->getCallbackQueue());
     ros::Subscriber forceSensorSubscriber = ros_node->subscribe(forceSensorSubOption);
 
-    // Setup subscriber to joy ps4 controller
-    ros::SubscribeOptions joystickSubOption = ros::SubscribeOptions::create<sensor_msgs::Joy>(
-        "/joy", 1, JoystickFeedback, ros::VoidPtr(), ros_node->getCallbackQueue());
-    ros::Subscriber joystickSubscriber = ros_node->subscribe(joystickSubOption);
+    // Setup subscriber to f_ext (from user controller)
+    ros::Subscriber f_ext_sub = ros_node->subscribe("/f_ext_raw", 10, fextCallback);
 
-    // Setup apply body wrench service client
-    wrench_client = ros_node->serviceClient<gazebo_msgs::ApplyBodyWrench>("/gazebo/apply_body_wrench");
+    // Setup subscriber to hybrid_mode
+    ros::Subscriber hybrid_mode_sub = ros_node->subscribe("/hybrid_mode", 10, hybridModeCallback);
+
+    // Setup subscriber to line_plane_points
+    ros::Subscriber line_plane_sub = ros_node->subscribe("/line_plane_points", 10, linePlaneCallback);
+
+    // Setup subscriber to circle_points
+    ros::Subscriber circle_sub = ros_node->subscribe("/circle_points", 10, circleCallback);
+
+    // Setup subscriber to spline_points
+    ros::Subscriber spline_sub = ros_node->subscribe("/spline_points", 10, splineCallback);
 
     // Declare kdl stuff
     KDL::Tree kdl_tree_;
@@ -316,6 +279,34 @@ int main(int argc, char **argv)
 
 void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr_)
 {
+    // First, check to see if geometries have been published. If they have not, we need to command the robot to remain still
+    if (line_plane_init && circle_init && spline_init)
+    {
+        // If geometries have been published, we only need to init the class instances once because they shapes are constant (for now)
+        if (!line_plane_class_init)
+        {
+            std::cout << "line_plane was init\n\n"
+                      << std::endl;
+            line = std::make_shared<Line3d>(line_plane_points[0], line_plane_points[1]);
+            plane = std::make_shared<Plane3d>(line_plane_points[0], line_plane_points[1], line_plane_points[2]);
+            line_plane_class_init = true;
+        }
+        if (!circle_class_init)
+        {
+            std::cout << "circle was init\n\n"
+                      << std::endl;
+            circle = std::make_shared<Circle3d>(circle_points[0], circle_points[1], circle_points[2]);
+            circle_class_init = true;
+        }
+        if (!spline_class_init)
+        {
+            std::cout << "spline was init\n\n"
+                      << std::endl;
+            spline = std::make_shared<Spline3d>(spline_points);
+            spline_class_init = true;
+        }
+    }
+
     // Explicit assignment for joint position, velocity, and effort
     q_.data[0] = jointStatesPtr_->position[2];
     q_.data[1] = jointStatesPtr_->position[3];
@@ -382,23 +373,23 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     // 3) Call line, plane, or circle (or nothing) object methods
     Eigen::Vector3d desired_position;
 #ifdef HYBRID
-    if (hybrid_mode_list[LINE_MODE_IDX])
+    if (hybrid_mode_list[LINE_MODE_IDX] && line_plane_class_init)
     {
 
-        desired_position = line.GetDesiredCrosstrackLocation(ee_translation, distance_param);
+        desired_position = line->GetDesiredCrosstrackLocation(ee_translation, distance_param);
     }
-    else if (hybrid_mode_list[PLANE_MODE_IDX])
+    else if (hybrid_mode_list[PLANE_MODE_IDX] && line_plane_class_init)
     {
-        desired_position = plane.GetDesiredCrosstrackLocation(ee_translation, distance_param_x, distance_param_y);
+        desired_position = plane->GetDesiredCrosstrackLocation(ee_translation, distance_param_x, distance_param_y);
     }
-    else if (hybrid_mode_list[CIRCLE_MODE_IDX])
+    else if (hybrid_mode_list[CIRCLE_MODE_IDX] && circle_class_init)
     {
-        desired_position = circle.GetDesiredCrosstrackLocation(ee_translation, theta_param);
+        desired_position = circle->GetDesiredCrosstrackLocation(ee_translation, theta_param);
     }
-    else if (hybrid_mode_list[SPLINE_MODE_IDX])
+    else if (hybrid_mode_list[SPLINE_MODE_IDX] && spline_class_init)
     {
-        spline.FindDesiredSplinePoint(ee_translation);
-        desired_position = spline.GetBestPoint();
+        spline->FindDesiredSplinePoint(ee_translation);
+        desired_position = spline->GetBestPoint();
     }
 #endif
 
@@ -408,7 +399,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     if (time_in_sec < 10)
     {
         Eigen::Vector3d x_offset(0.6, 0, 0);
-        desired_position = p_1 + x_offset;
+        desired_position = line_plane_points[0] + x_offset;
     }
     else
     {
@@ -439,7 +430,15 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
             pos_error_flag = 1;
         }
     }
-    error.head(3) << desired_position - current_position;
+    // If no geometry has been initialized, manually set error to zero to force the robot to remain still.
+    if (line_plane_class_init && circle_class_init && spline_class_init)
+    {
+        error.head(3) << desired_position - current_position;
+    }
+    else
+    {
+        error.head(3).setZero();
+    }
 
     // -----------EE Twist: Set desired twist in frenet frame----------------------------------------
     Eigen::Matrix<double, 6, 1> desired_velocity_frenet;
@@ -450,30 +449,30 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Vector3d e_t;
     Eigen::Vector3d e_t_plane;
 #ifdef HYBRID
-    if (hybrid_mode_list[LINE_MODE_IDX])
+    if (hybrid_mode_list[LINE_MODE_IDX] && line_plane_class_init)
     {
-        e_t = line.GetLineUnitDirection();
+        e_t = line->GetLineUnitDirection();
         // std::cout << "e_t vector (line)\n"
         //           << e_t << std::endl;
     }
-    else if (hybrid_mode_list[PLANE_MODE_IDX])
+    else if (hybrid_mode_list[PLANE_MODE_IDX] && line_plane_class_init)
     {
-        e_t = (plane.GetPlaneUnitDirection()).col(0);
-        e_t_plane = (plane.GetPlaneUnitDirection()).col(2);
+        e_t = (plane->GetPlaneUnitDirection()).col(0);
+        e_t_plane = (plane->GetPlaneUnitDirection()).col(2);
         // std::cout << "e_t vector (plane)\n"
         //           << e_t << std::endl;
         // std::cout << "e_t_plane vector (plane)\n"
         //           << e_t_plane << std::endl;
     }
-    else if (hybrid_mode_list[CIRCLE_MODE_IDX])
+    else if (hybrid_mode_list[CIRCLE_MODE_IDX] && circle_class_init)
     {
-        e_t = circle.GetUnitDirection(theta_param);
+        e_t = circle->GetUnitDirection(theta_param);
         // std::cout << "e_t vector (circle)\n"
         //           << e_t << std::endl;
     }
-    else if (hybrid_mode_list[SPLINE_MODE_IDX])
+    else if (hybrid_mode_list[SPLINE_MODE_IDX] && spline_class_init)
     {
-        e_t = spline.GetBestTangent();
+        e_t = spline->GetBestTangent();
         // std::cout << "e_t vector (spline)\n"
         //           << e_t << std::endl;
     }
@@ -611,7 +610,15 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Quaterniond error_limited(angle_axis);
     Eigen::Quaterniond q_desired = current_orientation * error_limited;
     error.tail(3) << error_limited.x(), error_limited.y(), error_limited.z();
-    error.tail(3) << current_orientation * error.tail(3);
+    // If no geometry has been initialized, manually set error to zero to force the robot to remain still.
+    if (line_plane_class_init && circle_class_init && spline_class_init)
+    {
+        error.tail(3) << current_orientation * error.tail(3);
+    }
+    else
+    {
+        error.tail(3).setZero();
+    }
     // error.tail(3) << 0,0,0; //Use this if we don't care about orientation
 
     /* ----------- Not currently using--------//Specify stiffness and damping
@@ -758,31 +765,31 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     // Eigen::Matrix<double,4,1> tau_d = J_.data.transpose()*(cartesian_stiffness*error + cartesian_damping*(-J_.data*q_dot_.data)) + G_.data + C_.data;
     Eigen::Matrix<double, 7, 1> tau_d;
     // tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
-    double time_begin_in_sec;
+    // double time_begin_in_sec;
     std::cout << "Time now:" << time_in_sec << std::endl;
-    if (time_in_sec > 1000.0)
-    {
-        // if(start_flag){
-        //     time_begin_in_sec = time_in_sec;
-        //     begin_cartesian_position = desired_position;
-        //     start_flag = false;
-        // }
-        // time_in_sec = time_in_sec - time_begin_in_sec;
-        // Eigen::Matrix<double,3,1> desired_position_cartesian;
-        // desired_position_cartesian = line.GetDesiredPositionTrajectory(begin_cartesian_position,time_in_sec,5.0);
-        // error.head(3) << desired_position_cartesian - current_position;
+    // if (time_in_sec > 1000.0)
+    // {
+    // if(start_flag){
+    //     time_begin_in_sec = time_in_sec;
+    //     begin_cartesian_position = desired_position;
+    //     start_flag = false;
+    // }
+    // time_in_sec = time_in_sec - time_begin_in_sec;
+    // Eigen::Matrix<double,3,1> desired_position_cartesian;
+    // desired_position_cartesian = line.GetDesiredPositionTrajectory(begin_cartesian_position,time_in_sec,5.0);
+    // error.head(3) << desired_position_cartesian - current_position;
 
-        // Eigen::Matrix<double,6,1> desired_velocity_cartesian;
-        // desired_velocity_cartesian.setZero();
-        // desired_velocity_cartesian.head(3) << line.GetDesiredVelocityTrajectory(begin_cartesian_position,time_in_sec,5.0);
+    // Eigen::Matrix<double,6,1> desired_velocity_cartesian;
+    // desired_velocity_cartesian.setZero();
+    // desired_velocity_cartesian.head(3) << line.GetDesiredVelocityTrajectory(begin_cartesian_position,time_in_sec,5.0);
 
-        // Eigen::Matrix<double,6,1> desired_acceleration_cartesian;
-        // desired_acceleration_cartesian.setZero();
-        // desired_acceleration_cartesian.head(3) << line.GetDesiredAccelerationTrajectory(begin_cartesian_position,time_in_sec,5.0);
+    // Eigen::Matrix<double,6,1> desired_acceleration_cartesian;
+    // desired_acceleration_cartesian.setZero();
+    // desired_acceleration_cartesian.head(3) << line.GetDesiredAccelerationTrajectory(begin_cartesian_position,time_in_sec,5.0);
 
-        // // Control law for trajectory control
-        // tau_d = J_.data.transpose()*(mass_cart*desired_acceleration_cartesian+ R*K_des*R.transpose()*error + R*C_des*R.transpose()*(desired_velocity_cartesian-J_.data*q_dot_.data)) + G_.data + C_.data;
-    }
+    // // Control law for trajectory control
+    // tau_d = J_.data.transpose()*(mass_cart*desired_acceleration_cartesian+ R*K_des*R.transpose()*error + R*C_des*R.transpose()*(desired_velocity_cartesian-J_.data*q_dot_.data)) + G_.data + C_.data;
+    // }
     // else if(ext_force_global.dot(e_t) > 50)
     // {
     //     tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
@@ -793,11 +800,11 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     //     tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(-R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
     //     std::cout << "Neg vel" << std::endl;
     // }
-    else
-    {
-        tau_d = J_.data.transpose() * (R * K_switch * K_des * R.transpose() * error + R * C_des * R.transpose() * (-J_.data * q_dot_.data)) + G_.data + C_.data;
-        std::cout << "Cross track only" << std::endl;
-    }
+    // else
+    // {
+    tau_d = J_.data.transpose() * (R * K_switch * K_des * R.transpose() * error + R * C_des * R.transpose() * (-J_.data * q_dot_.data)) + G_.data + C_.data;
+    std::cout << "Cross track only" << std::endl;
+    // }
 
     //-------------Compute total control law------------------------------------------------------------------
     // Optionally add the null space command torques here
@@ -878,9 +885,6 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     traj.orientation.w = q_desired.w();
     traj_pub_.publish(traj);
 
-    // Publish Spline marker
-    spline_pub.publish(spline.GetSplineVis());
-
     // Publish a bunch of stuff to visualize results
 
     // Calculate the Homogeneous Transformation Matrix of the EE frame with respect to the global frame
@@ -931,8 +935,6 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     des_rot_pub_.publish(desired_orientation_euler_final);
 
     // Fext in the EE frame
-    Eigen::Vector4d Fext_homogeneous;
-    Fext_homogeneous << apply_wrench_req.wrench.force.x, apply_wrench_req.wrench.force.y, apply_wrench_req.wrench.force.z, 1.0;
     Eigen::Vector4d Fext_ee_homogeneous = T * Fext_homogeneous;
     Eigen::Vector3d Fext_ee = Fext_ee_homogeneous.head<3>();
     // std::cout << "ee position: " << current_position_ee << std::endl;
@@ -961,86 +963,6 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
         }
     }
     k_switch_pub_.publish(k_switch_final);
-
-    // Always publish the current hybrid mode
-    std_msgs::UInt8MultiArray hybrid_mode;
-    hybrid_mode.data = hybrid_mode_list;
-    hybrid_mode_pub_.publish(hybrid_mode);
-}
-
-void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
-{
-    ext_force_joystick[0] = (joystickhandlePtr_->axes[0]) * (-1.0); // force along x-axis. Left analog controller going left/right
-    ext_force_joystick[1] = (joystickhandlePtr_->axes[2]) * (-1.0); // force along y-axis. Right analog controller going left/right
-    ext_force_joystick[2] = joystickhandlePtr_->axes[1];            // force along z-axis. Left analog controller going up/down
-    bool buttonX = joystickhandlePtr_->buttons[0];                  // X button
-    bool buttonA = joystickhandlePtr_->buttons[1];                  // A button
-    bool buttonB = joystickhandlePtr_->buttons[2];                  // B button
-    bool buttonY = joystickhandlePtr_->buttons[3];                  // Y button
-    bool buttonR2 = joystickhandlePtr_->buttons[7];                 // R2 button
-
-    double max_force = 20;
-    apply_wrench_req.body_name = "franka::panda_link7";
-    apply_wrench_req.reference_frame = "world";
-    apply_wrench_req.wrench.force.x = ext_force_joystick[0] * max_force / 8;
-    apply_wrench_req.wrench.force.y = ext_force_joystick[1] * max_force / 8;
-    apply_wrench_req.wrench.force.z = ext_force_joystick[2] * max_force / 8;
-    // apply_wrench_req.start_time = 0;
-    apply_wrench_req.duration = (ros::Duration)(-1);
-    wrench_client.call(apply_wrench_req, apply_wrench_resp);
-
-    // // This part is to move joint4 out of awkward position
-    // if (buttonR2 && buttonX)
-    // {
-    //     std_msgs::Float64 msg;
-    //     msg.data = 100;
-    //     joint4_torque_pub_.publish(msg);
-    // }
-    // else if (buttonX)
-    // {
-    //     std_msgs::Float64 msg;
-    //     msg.data = -100;
-    //     joint4_torque_pub_.publish(msg);
-    // }
-
-    // Handle hybrid mode switching
-    if (buttonA)
-    {
-        // LINE
-        desired_mode_idx = LINE_MODE_IDX;
-    }
-    else if (buttonB)
-    {
-        // PLANE
-        desired_mode_idx = PLANE_MODE_IDX;
-    }
-    else if (buttonY)
-    {
-        // CIRCLE
-        desired_mode_idx = CIRCLE_MODE_IDX;
-    }
-    else if (buttonX)
-    {
-        // SPLINE
-        desired_mode_idx = SPLINE_MODE_IDX;
-    }
-    // Update hybrid mode list based on button inputs
-    for (int i = 0; i < NUM_MODES; i++)
-    {
-        if (i == desired_mode_idx)
-        {
-            hybrid_mode_list[i] = 1;
-        }
-        else
-        {
-            hybrid_mode_list[i] = 0;
-        }
-    }
-
-    // Always publish the current hybrid mode
-    std_msgs::UInt8MultiArray hybrid_mode;
-    hybrid_mode.data = hybrid_mode_list;
-    hybrid_mode_pub_.publish(hybrid_mode);
 }
 
 void ForceSensorPublisher(const geometry_msgs::WrenchStamped::ConstPtr &forceSensorPtr_)
@@ -1123,4 +1045,69 @@ uint8_t CheckOctant(Eigen::Vector3d e_t)
     }
 
     return e_t_octant;
+}
+
+void fextCallback(const geometry_msgs::Point::ConstPtr &msg)
+{
+    // update the homogeneous f_ext vector
+    Fext_homogeneous
+        << msg->x,
+        msg->y, msg->z, 1.0;
+}
+
+void hybridModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg)
+{
+    // Copy message data into global variable
+    hybrid_mode_list = msg->data;
+}
+
+void linePlaneCallback(const line_manipulation_control_law_publisher::PointArray::ConstPtr &msg)
+{
+    // We only want to init once
+    if (!line_plane_init)
+    {
+        line_plane_points.reserve(msg->points.size());
+        line_plane_init = true;
+    }
+
+    for (const auto &pt : msg->points)
+    {
+        // Convert geometry_msgs::Point -> Eigen::Vector3d
+        Eigen::Vector3d vec(pt.x, pt.y, pt.z);
+        line_plane_points.push_back(vec);
+    }
+}
+
+void circleCallback(const line_manipulation_control_law_publisher::PointArray::ConstPtr &msg)
+{
+    // We only want to init once
+    if (!circle_init)
+    {
+        circle_points.reserve(msg->points.size());
+        circle_init = true;
+    }
+
+    for (const auto &pt : msg->points)
+    {
+        // Convert geometry_msgs::Point -> Eigen::Vector3d
+        Eigen::Vector3d vec(pt.x, pt.y, pt.z);
+        circle_points.push_back(vec);
+    }
+}
+
+void splineCallback(const line_manipulation_control_law_publisher::PointArray::ConstPtr &msg)
+{
+    // We only want to init once
+    if (!spline_init)
+    {
+        spline_points.reserve(msg->points.size());
+        spline_init = true;
+    }
+
+    for (const auto &pt : msg->points)
+    {
+        // Convert geometry_msgs::Point -> Eigen::Vector3d
+        Eigen::Vector3d vec(pt.x, pt.y, pt.z);
+        spline_points.push_back(vec);
+    }
 }

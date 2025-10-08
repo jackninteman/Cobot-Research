@@ -26,10 +26,10 @@ class HybridSubscriber
 {
 public:
   // Constructor
-  HybridSubscriber(ros::NodeHandle &nh)
+  HybridSubscriber(std::unique_ptr<ros::NodeHandle> &nh)
   {
     // Initialize the subscriber
-    sub_ = nh.subscribe("/hybrid_mode", 1, &HybridSubscriber::callback, this);
+    sub_ = nh->subscribe("/hybrid_mode", 1, &HybridSubscriber::callback, this);
 
     // Optionally initialize the vector with some default values
     hybrid_mode_data = DEFAULT_MODE;
@@ -63,9 +63,9 @@ private:
 class SplineSubcriber
 {
 public:
-  SplineSubcriber(ros::NodeHandle &nh)
+  SplineSubcriber(std::unique_ptr<ros::NodeHandle> &nh)
   {
-    marker_sub_ = nh.subscribe("/spline", 1, &SplineSubcriber::markerCallback, this);
+    marker_sub_ = nh->subscribe("/spline", 1, &SplineSubcriber::markerCallback, this);
   }
 
   // Getter for full marker
@@ -102,8 +102,12 @@ geometry_msgs::Point eigenToPoint(const Eigen::Vector3d &vec)
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "points_and_lines");
-  ros::NodeHandle n;
-  ros::Publisher marker_pub = n.advertise<visualization_msgs::Marker>("visualization_marker", 10);
+
+  // Setup n as unique pointer pointed to heap section
+  // This node handle will be there as long as the main function keeps spinning
+  std::unique_ptr<ros::NodeHandle> n(new ros::NodeHandle);
+
+  ros::Publisher marker_pub = n->advertise<visualization_msgs::Marker>("visualization_marker", 10);
 
   // Initialize the subscriber node to recieve hybrid mode status
   HybridSubscriber hybrid_subscriber(n);
@@ -209,20 +213,20 @@ int main(int argc, char **argv)
     Eigen::Vector3d p_3;
     Eigen::Quaterniond plane_orientation;
     std::vector<double> spline_points;
-    n.getParam("p_initial_x", p_1[0]);
-    n.getParam("p_initial_y", p_1[1]);
-    n.getParam("p_initial_z", p_1[2]);
-    n.getParam("p_final_x", p_2[0]);
-    n.getParam("p_final_y", p_2[1]);
-    n.getParam("p_final_z", p_2[2]);
-    n.getParam("p_plane_x", p_3[0]);
-    n.getParam("p_plane_y", p_3[1]);
-    n.getParam("p_plane_z", p_3[2]);
-    n.getParam("plane_orientation_w", plane_orientation.w());
-    n.getParam("plane_orientation_x", plane_orientation.x());
-    n.getParam("plane_orientation_y", plane_orientation.y());
-    n.getParam("plane_orientation_z", plane_orientation.z());
-    n.getParam("spline_points", spline_points);
+    n->getParam("p_initial_x", p_1[0]);
+    n->getParam("p_initial_y", p_1[1]);
+    n->getParam("p_initial_z", p_1[2]);
+    n->getParam("p_final_x", p_2[0]);
+    n->getParam("p_final_y", p_2[1]);
+    n->getParam("p_final_z", p_2[2]);
+    n->getParam("p_plane_x", p_3[0]);
+    n->getParam("p_plane_y", p_3[1]);
+    n->getParam("p_plane_z", p_3[2]);
+    n->getParam("plane_orientation_w", plane_orientation.w());
+    n->getParam("plane_orientation_x", plane_orientation.x());
+    n->getParam("plane_orientation_y", plane_orientation.y());
+    n->getParam("plane_orientation_z", plane_orientation.z());
+    n->getParam("spline_points", spline_points);
     plane.pose.position.x = p_1[0];
     plane.pose.position.y = p_1[1];
     plane.pose.position.z = p_1[2];
@@ -231,11 +235,11 @@ int main(int argc, char **argv)
     plane.pose.orientation.y = plane_orientation.y();
     plane.pose.orientation.z = plane_orientation.z();
     Eigen::Vector3d p_difference((p_2 - p_1) / (p_2 - p_1).norm());
-    n.getParam("p_center_x", p_c[0]);
-    n.getParam("p_center_y", p_c[1]);
-    n.getParam("p_center_z", p_c[2]);
-    n.getParam("circle_rad", radius);
-    n.getParam("circle_rot", R_flat);
+    n->getParam("p_center_x", p_c[0]);
+    n->getParam("p_center_y", p_c[1]);
+    n->getParam("p_center_z", p_c[2]);
+    n->getParam("circle_rad", radius);
+    n->getParam("circle_rot", R_flat);
     if (R_flat.size() == 9)
     {
       R_circle = Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(R_flat.data());

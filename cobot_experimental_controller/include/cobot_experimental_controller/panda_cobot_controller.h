@@ -20,6 +20,8 @@
 #include <franka_hw/franka_state_interface.h>
 
 #include <sensor_msgs/Joy.h>
+#include "std_msgs/UInt8MultiArray.h"
+#include "cobot_experimental_controller/PointArray.h"
 
 namespace cobot_experimental_controller
 {
@@ -74,7 +76,6 @@ namespace cobot_experimental_controller
     Eigen::Vector3d position_d_target_;
     Eigen::Quaterniond orientation_d_target_;
 
-    Eigen::Vector3d ext_force_joystick;
     bool start_flag = true;
     double time_begin_in_sec;
     Eigen::Vector3d begin_cartesian_position;
@@ -84,17 +85,21 @@ namespace cobot_experimental_controller
 
     // Equilibrium pose subscriber
     ros::Subscriber sub_equilibrium_pose_;
+    ros::Subscriber hybrid_mode_sub;
+    ros::Subscriber line_plane_sub;
+    ros::Subscriber circle_sub;
+    ros::Subscriber spline_sub;
     ros::Publisher pose_pub_;
     ros::Publisher traj_pub_;
     ros::Publisher fext_ee_pub_;
     ros::Publisher cur_pos_ee_pub_;
     ros::Publisher des_pos_ee_pub_;
     ros::Publisher k_switch_pub_;
-    ros::Publisher hybrid_mode_pub_;
-    ros::Publisher spline_pub;
-    ros::Subscriber joystickSubscriber;
     void equilibriumPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg);
-    void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_);
+    void hybridModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg);
+    void linePlaneCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);
+    void circleCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);
+    void splineCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);
     uint8_t CheckOctant(Eigen::Vector3d e_t);
   };
 
