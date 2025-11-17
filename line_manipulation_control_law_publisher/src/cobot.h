@@ -24,6 +24,7 @@
 #define SPLINE_MODE_IDX (3)
 
 #define DEFAULT_MODE std::vector<uint8_t>({1, 0, 0, 0})
+#define MODE_STRINGS std::vector<std::string>({"LINE", "PLANE", "CIRCLE", "SPLINE"})
 
 //------------------------------------------------------------------------------
 // VARIABLES

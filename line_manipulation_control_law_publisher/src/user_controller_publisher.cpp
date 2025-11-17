@@ -17,6 +17,7 @@
 #include <gazebo_msgs/ApplyBodyWrench.h>
 #include "std_msgs/UInt8MultiArray.h"
 #include "std_msgs/Float64.h"
+#include "std_msgs/String.h"
 #include <ros/callback_queue.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
@@ -28,12 +29,14 @@ gazebo_msgs::ApplyBodyWrench::Response apply_wrench_resp;
 
 std::vector<uint8_t> hybrid_mode_list = DEFAULT_MODE;
 int desired_mode_idx = LINE_MODE_IDX;
+std_msgs::String cur_mode_string;
 
 // Declare callback function to handle user controller input
 void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_);
 
 ros::Publisher hybrid_mode_pub_;
-ros::Publisher f_ext_raw;
+ros::Publisher hybrid_mode_string_pub_;
+ros::Publisher f_ext_raw_pub_;
 
 int main(int argc, char **argv)
 {
@@ -50,7 +53,10 @@ int main(int argc, char **argv)
 
     hybrid_mode_pub_ = nh->advertise<std_msgs::UInt8MultiArray>("/hybrid_mode", 1);
 
-    f_ext_raw = nh->advertise<geometry_msgs::Point>("/f_ext_raw", 10);
+    hybrid_mode_string_pub_ = nh->advertise<std_msgs::String>("/hybrid_mode_string", 1);
+    cur_mode_string.data = MODE_STRINGS[0];
+
+    f_ext_raw_pub_ = nh->advertise<geometry_msgs::Point>("/f_ext_raw", 10);
 
     // Setup apply body wrench service client
     wrench_client = nh->serviceClient<gazebo_msgs::ApplyBodyWrench>("/gazebo/apply_body_wrench");
@@ -59,19 +65,20 @@ int main(int argc, char **argv)
 
     while (ros::ok())
     {
-        Eigen::Vector4d Fext_homogeneous;
-        Fext_homogeneous << apply_wrench_req.wrench.force.x, apply_wrench_req.wrench.force.y, apply_wrench_req.wrench.force.z, 1.0;
+        Eigen::Vector3d Fext;
+        Fext << apply_wrench_req.wrench.force.x, apply_wrench_req.wrench.force.y, apply_wrench_req.wrench.force.z;
         geometry_msgs::Point point_msg;
-        point_msg.x = Fext_homogeneous(0);
-        point_msg.y = Fext_homogeneous(1);
-        point_msg.z = Fext_homogeneous(2);
+        point_msg.x = Fext(0);
+        point_msg.y = Fext(1);
+        point_msg.z = Fext(2);
 
-        f_ext_raw.publish(point_msg);
+        f_ext_raw_pub_.publish(point_msg);
 
         // Always publish the current hybrid mode
         std_msgs::UInt8MultiArray hybrid_mode;
         hybrid_mode.data = hybrid_mode_list;
         hybrid_mode_pub_.publish(hybrid_mode);
+        hybrid_mode_string_pub_.publish(cur_mode_string);
 
         ros::spinOnce();
         rate.sleep();
@@ -104,21 +111,25 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
     {
         // LINE
         desired_mode_idx = LINE_MODE_IDX;
+        cur_mode_string.data = MODE_STRINGS[LINE_MODE_IDX];
     }
     else if (buttonB)
     {
         // PLANE
         desired_mode_idx = PLANE_MODE_IDX;
+        cur_mode_string.data = MODE_STRINGS[PLANE_MODE_IDX];
     }
     else if (buttonY)
     {
         // CIRCLE
         desired_mode_idx = CIRCLE_MODE_IDX;
+        cur_mode_string.data = MODE_STRINGS[CIRCLE_MODE_IDX];
     }
     else if (buttonX)
     {
         // SPLINE
         desired_mode_idx = SPLINE_MODE_IDX;
+        cur_mode_string.data = MODE_STRINGS[SPLINE_MODE_IDX];
     }
     // Update hybrid mode list based on button inputs
     for (int i = 0; i < NUM_MODES; i++)
@@ -137,4 +148,5 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
     std_msgs::UInt8MultiArray hybrid_mode;
     hybrid_mode.data = hybrid_mode_list;
     hybrid_mode_pub_.publish(hybrid_mode);
+    hybrid_mode_string_pub_.publish(cur_mode_string);
 }

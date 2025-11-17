@@ -23,6 +23,8 @@
   <param name="deadzone" value="0.1" />
   <param name="autorepeat_rate" value="20.0" />
 </node>
+
+<node name="rqt" pkg="rqt_gui" type="rqt_gui" args="--perspective-file $(find rqt_cobot)/config/cobot_gui.perspective" output="screen"/>
 </launch>
 
 

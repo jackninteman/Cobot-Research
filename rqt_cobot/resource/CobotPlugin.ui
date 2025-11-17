@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+    <class>Co-Manipulation Interactive GUI</class>
+    <widget class="QWidget" name="Co-Manipulation Interactive GUI">
+        <property name="geometry">
+            <rect>
+                <x>0</x>
+                <y>0</y>
+                <width>400</width>
+                <height>300</height>
+            </rect>
+        </property>
+        <property name="windowTitle">
+            <string>Co-Manipulation Interactive GUI</string>
+        </property>
+        <!-- Widget for current hybrid mode -->
+        <widget class="QLabel" name="hybridModeLabel">
+            <property name="text">
+                <string>-</string>
+            </property>
+            <property name="alignment">
+                <set>Qt::AlignCenter</set>
+            </property>
+            <property name="styleSheet">
+                <string>border: 1px solid black; padding: 4px;</string>
+            </property>
+            <property name="geometry">
+                <rect>
+                    <x>10</x>
+                    <y>10</y>
+                    <width>300</width>
+                    <height>30</height>
+                </rect>
+            </property>
+        </widget>
+        <!-- Widget for current run time -->
+        <widget class="QLabel" name="timeNow">
+            <property name="text">
+                <string>-</string>
+            </property>
+            <property name="alignment">
+                <set>Qt::AlignCenter</set>
+            </property>
+            <property name="styleSheet">
+                <string>border: 1px solid black; padding: 4px;</string>
+            </property>
+            <property name="geometry">
+                <rect>
+                    <x>10</x>
+                    <y>50</y>
+                    <width>300</width>
+                    <height>30</height>
+                </rect>
+            </property>
+        </widget>
+        <!-- Widget for wrench threshold table title -->
+        <widget class="QLabel" name="wrenchTitle">
+            <property name="text">
+                <string>External Wrench Limit Detection</string>
+            </property>
+            <property name="alignment">
+                <set>Qt::AlignCenter</set>
+            </property>
+            <property name="styleSheet">
+                <string>border: 1px solid black; padding: 4px;</string>
+            </property>
+            <property name="geometry">
+                <rect>
+                    <x>320</x>
+                    <y>10</y>
+                    <width>700</width>
+                    <height>30</height>
+                </rect>
+            </property>
+        </widget>
+        <!-- Widget for table of wrench thresholds -->
+        <widget class="QTableWidget" name="wrenchTable">
+            <property name="rowCount">
+                <number>2</number>
+            </property>
+            <property name="columnCount">
+                <number>6</number>
+            </property>
+            <property name="geometry">
+                <rect>
+                    <x>320</x>
+                    <y>40</y>
+                    <width>700</width>
+                    <height>85</height>
+                </rect>
+            </property>
+        </widget>
+        <!-- Widget for joint torque threshold table title -->
+        <widget class="QLabel" name="torqueTitle">
+            <property name="text">
+                <string>Joint Torque Limit Detection</string>
+            </property>
+            <property name="alignment">
+                <set>Qt::AlignCenter</set>
+            </property>
+            <property name="styleSheet">
+                <string>border: 1px solid black; padding: 4px;</string>
+            </property>
+            <property name="geometry">
+                <rect>
+                    <x>240</x>
+                    <y>135</y>
+                    <width>780</width>
+                    <height>30</height>
+                </rect>
+            </property>
+        </widget>
+        <!-- Widget for table of joint torque thresholds -->
+        <widget class="QTableWidget" name="torqueTable">
+            <property name="rowCount">
+                <number>2</number>
+            </property>
+            <property name="columnCount">
+                <number>7</number>
+            </property>
+            <property name="geometry">
+                <rect>
+                    <x>240</x>
+                    <y>165</y>
+                    <width>780</width>
+                    <height>85</height>
+                </rect>
+            </property>
+        </widget>
+        <!-- Widget for error log title -->
+        <widget class="QLabel" name="errorReportTitle">
+            <property name="text">
+                <string>Error Log</string>
+            </property>
+            <property name="alignment">
+                <set>Qt::AlignCenter</set>
+            </property>
+            <property name="styleSheet">
+                <string>border: 1px solid black; padding: 4px;</string>
+            </property>
+            <property name="geometry">
+                <rect>
+                    <x>10</x>
+                    <y>260</y>
+                    <width>1010</width>
+                    <height>30</height>
+                </rect>
+            </property>
+        </widget>
+        <!-- Widget for error log -->
+        <widget class="QTextEdit" name="errorReport">
+            <property name="readOnly">
+                <bool>true</bool>
+            </property>
+            <property name="lineWrapMode">
+                <enum>QTextEdit::WidgetWidth</enum>
+            </property>
+            <property name="verticalScrollBarPolicy">
+                <enum>Qt::ScrollBarAsNeeded</enum>
+            </property>
+            <property name="styleSheet">
+                <string notr="true">
+                    QTextEdit {
+                        background-color: #f5f5f5;
+                        border: 1px solid #ccc;
+                        font-family: Consolas;
+                        font-size: 11pt;
+                        padding: 4px;
+                    }
+                </string>
+            </property>
+            <property name="geometry">
+                <rect>
+                    <x>10</x>
+                    <y>290</y>
+                    <width>1010</width>
+                    <height>400</height>
+                </rect>
+            </property>
+        </widget>
+  <!-- <widget class="QPushButton" name="Test">
+   <property name="geometry">
+    <rect>
+     <x>120</x>
+     <y>70</y>
+     <width>98</width>
+     <height>27</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Original Name</string>
+   </property>
+  </widget> -->
+    </widget>
+ <resources/>
+ <connections/>
+</ui>

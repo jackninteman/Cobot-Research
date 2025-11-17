@@ -11,6 +11,9 @@
 #include <ros/ros.h>
 #include <algorithm>
 #include <iostream>
+#include <array>
+#include <sstream>
+#include <string>
 
 #include <space_manipulation/circle3d.h>
 #include <space_manipulation/line3d.h>
@@ -52,14 +55,47 @@ namespace cobot_experimental_controller
   bool PandaCobotController::init(hardware_interface::RobotHW *robot_hw,
                                   ros::NodeHandle &node_handle)
   {
+    std::vector<double> default_torques = {25.0, 25.0, 23.0, 23.0, 20.0, 17.5, 15.0};
+    std::vector<double> default_forces = {40.0, 40.0, 40.0, 40.0, 40.0, 40.0};
+
+    // Read torque thresholds
+    lower_torque_acc = readCollisionThreshold(node_handle,
+                                              "lower_torque_thresholds_acceleration", default_torques);
+    upper_torque_acc = readCollisionThreshold(node_handle,
+                                              "upper_torque_thresholds_acceleration", default_torques);
+    lower_torque_nom = readCollisionThreshold(node_handle,
+                                              "lower_torque_thresholds_nominal", default_torques);
+    upper_torque_nom = readCollisionThreshold(node_handle,
+                                              "upper_torque_thresholds_nominal", default_torques);
+
+    // Read force thresholds
+    lower_force_acc = readCollisionThreshold(node_handle,
+                                             "lower_force_thresholds_acceleration", default_forces);
+    upper_force_acc = readCollisionThreshold(node_handle,
+                                             "upper_force_thresholds_acceleration", default_forces);
+    lower_force_nom = readCollisionThreshold(node_handle,
+                                             "lower_force_thresholds_nominal", default_forces);
+    upper_force_nom = readCollisionThreshold(node_handle,
+                                             "upper_force_thresholds_nominal", default_forces);
+
+    torque_lower_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/torque_lower", 1);
+    torque_upper_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/torque_upper", 1);
+    force_lower_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/force_lower", 1);
+    force_upper_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/force_upper", 1);
+
     std::vector<double> cartesian_stiffness_vector;
     std::vector<double> cartesian_damping_vector;
     pose_pub_ = node_handle.advertise<geometry_msgs::Pose>("/pose", 1);
     traj_pub_ = node_handle.advertise<geometry_msgs::Pose>("/traj", 1);
     fext_ee_pub_ = node_handle.advertise<geometry_msgs::Vector3>("/f_ext", 1);
+    tauext_ee_pub_ = node_handle.advertise<geometry_msgs::Vector3>("/tau_ext", 1);
     cur_pos_ee_pub_ = node_handle.advertise<geometry_msgs::Vector3>("/cur_pos_ee", 1);
     des_pos_ee_pub_ = node_handle.advertise<geometry_msgs::Vector3>("/des_pos_ee", 1);
     k_switch_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/k_switch", 1);
+    tau_d_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/tau_d", 1);
+    time_now_pub_ = node_handle.advertise<std_msgs::Float64>("/time_now", 1);
+    joint_collision_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/joint_collision", 1);
+    cart_collision_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/cart_collision", 1);
 
     sub_equilibrium_pose_ =
         node_handle.subscribe("/equilibrium_pose", 20, &PandaCobotController::equilibriumPoseCallback,
@@ -190,6 +226,7 @@ namespace cobot_experimental_controller
       // If geometries have been published, we only need to init the class instances once because they shapes are constant (for now)
       if (!line_plane_class_init)
       {
+        time_begin_in_sec = time.now().toSec();
         std::cout << "line_plane was init\n\n"
                   << std::endl;
         line = std::make_shared<Line3d>(line_plane_points[0], line_plane_points[1]);
@@ -218,11 +255,48 @@ namespace cobot_experimental_controller
     std::array<double, 42> jacobian_array =
         model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
     std::array<double, 49> mass_joint_array = model_handle_->getMass();
+
     // Get time now
-    double time_in_sec = time.now().toSec();
+    double time_in_sec = time.now().toSec() - time_begin_in_sec;
+    std_msgs::Float64 time_now;
+    time_now.data = time_in_sec;
+    time_now_pub_.publish(time_now);
 
     // Estimate the external force on the end effector
-    std::array<double, 6> external_wrench = robot_state.O_F_ext_hat_K;
+    std::vector<double> external_wrench(robot_state.K_F_ext_hat_K.begin(), robot_state.K_F_ext_hat_K.end());
+    // std::array<double, 6> external_wrench = robot_state.O_F_ext_hat_K;
+    // Check which joint contact thresholds are active
+    std::array<double, 7> joint_contact = robot_state.joint_contact;
+    // Check which joint collision thresholds are active
+    std::array<double, 7> joint_collision = robot_state.joint_collision;
+    // Check which cartesian contact thresholds are active
+    std::array<double, 6> cart_contact = robot_state.cartesian_contact;
+    // Check which cartesian collision thresholds are exceeded
+    std::array<double, 6> cart_collision = robot_state.cartesian_collision;
+
+    std_msgs::Float64MultiArray joint_collision_msg;
+    joint_collision_msg.data.clear();
+    joint_collision_msg.data.insert(joint_collision_msg.data.end(), joint_collision.begin(), joint_collision.end());
+
+    std_msgs::Float64MultiArray cart_collision_msg;
+    cart_collision_msg.data.clear();
+    cart_collision_msg.data.insert(cart_collision_msg.data.end(), cart_collision.begin(), cart_collision.end());
+
+    // ROS_INFO_STREAM("cart_contact: " << cart_contact[0] << ", " << cart_contact[1] << ", " << cart_contact[2] << ", " << cart_contact[3] << ", " << cart_contact[4] << ", " << cart_contact[5]);
+    // ROS_INFO_STREAM("cart_collision: " << cart_collision[0] << ", " << cart_collision[1] << ", " << cart_collision[2] << ", " << cart_collision[3] << ", " << cart_collision[4] << ", " << cart_collision[5]);
+
+    std_msgs::Float64MultiArray torque_lower;
+    torque_lower.data.resize(7);
+    torque_lower.data = lower_torque_acc;
+    std_msgs::Float64MultiArray torque_upper;
+    torque_upper.data.resize(7);
+    torque_upper.data = upper_torque_acc;
+    std_msgs::Float64MultiArray force_lower;
+    force_lower.data.resize(6);
+    force_lower.data = lower_force_acc;
+    std_msgs::Float64MultiArray force_upper;
+    force_upper.data.resize(6);
+    force_upper.data = upper_force_acc;
 
     // convert to Eigen
     Eigen::Map<Eigen::Matrix<double, 7, 1>> coriolis(coriolis_array.data());
@@ -591,7 +665,6 @@ namespace cobot_experimental_controller
     //-------------Compute ControlLaw-------------------------------------
     // Gravity term is not necessary because the hardware driver handles the weight of the panda
     Eigen::Matrix<double, 7, 1> tau_d;
-    double time_begin_in_sec;
     tau_d = jacobian.transpose() * (R * K_switch * K_des * R.transpose() * error +
                                     R * C_des * R.transpose() * (-jacobian * dq)) +
             coriolis;
@@ -657,16 +730,26 @@ namespace cobot_experimental_controller
     des_pos_ee_pub_.publish(desired_position_ee_final);
 
     // Fext in the EE frame
-    Eigen::Vector4d Fext_homogeneous;
-    Fext_homogeneous << external_wrench[0], external_wrench[1], external_wrench[2], 1.0;
-    Eigen::Vector4d Fext_ee_homogeneous = T * Fext_homogeneous;
-    Eigen::Vector3d Fext_ee = Fext_ee_homogeneous.head<3>();
+    Eigen::Vector3d Fext;
+    Fext << external_wrench[0], external_wrench[1], external_wrench[2];
+    Eigen::Vector3d Fext_ee = R3_3 * Fext;
+    // Eigen::Vector3d Fext_ee = Fext_ee_homogeneous.head<3>();
     // std::cout << "ee position: " << current_position_ee << std::endl;
     geometry_msgs::Vector3 Fext_ee_final;
     Fext_ee_final.x = Fext_ee.x();
     Fext_ee_final.y = Fext_ee.y();
     Fext_ee_final.z = Fext_ee.z();
     fext_ee_pub_.publish(Fext_ee_final);
+
+    // Tauext in the EE frame
+    Eigen::Vector4d Tauext;
+    Tauext << external_wrench[3], external_wrench[4], external_wrench[5], 1.0;
+    Eigen::Vector4d Tauext_ee = T * Tauext;
+    geometry_msgs::Vector3 Tauext_ee_final;
+    Tauext_ee_final.x = Tauext_ee.x();
+    Tauext_ee_final.y = Tauext_ee.y();
+    Tauext_ee_final.z = Tauext_ee.z();
+    tauext_ee_pub_.publish(Tauext_ee_final);
 
     // K_switch matrix
     std_msgs::Float64MultiArray k_switch_final;
@@ -688,12 +771,34 @@ namespace cobot_experimental_controller
     }
     k_switch_pub_.publish(k_switch_final);
 
+    // Force lower and upper limits
+    force_lower_pub_.publish(force_lower);
+    force_upper_pub_.publish(force_upper);
+
+    // Torque lower and upper limits
+    torque_lower_pub_.publish(torque_lower);
+    torque_upper_pub_.publish(torque_upper);
+
     // Saturate torque rate to avoid discontinuities
     tau_d << saturateTorqueRate(tau_d, tau_J_d);
+
+    checkThresholds(joint_collision, cart_collision);
+
     for (size_t i = 0; i < 7; ++i)
     {
       joint_handles_[i].setCommand(tau_d(i));
     }
+
+    std_msgs::Float64MultiArray tau_d_msg;
+    tau_d_msg.data.resize(tau_d.size());
+    for (int i = 0; i < tau_d.size(); ++i)
+    {
+      tau_d_msg.data[i] = tau_d(i);
+    }
+    tau_d_pub_.publish(tau_d_msg);
+
+    joint_collision_pub_.publish(joint_collision_msg);
+    cart_collision_pub_.publish(cart_collision_msg);
   }
 
   Eigen::Matrix<double, 7, 1> PandaCobotController::saturateTorqueRate(
@@ -824,6 +929,73 @@ namespace cobot_experimental_controller
       // Convert geometry_msgs::Point -> Eigen::Vector3d
       Eigen::Vector3d vec(pt.x, pt.y, pt.z);
       spline_points.push_back(vec);
+    }
+  }
+
+  std::vector<double> PandaCobotController::readCollisionThreshold(const ros::NodeHandle &nh, const std::string &name, const std::vector<double> &defaults)
+  {
+    std::vector<double> vals;
+    std::string full_name = "collision_config/" + name;
+    if (nh.getParam(full_name, vals))
+    {
+      if (vals.size() == defaults.size())
+      {
+        // ROS_INFO_STREAM("Read " << full_name << " with " << vals.size() << " entries.");
+        return vals;
+      }
+      else
+      {
+        ROS_WARN_STREAM("Parameter " << full_name
+                                     << " has size " << vals.size()
+                                     << " but expected " << defaults.size()
+                                     << ". Using defaults.");
+      }
+    }
+    else
+    {
+      // ROS_INFO_STREAM("Parameter " << full_name << " not found. Using defaults.");
+    }
+    return defaults;
+  }
+
+  void PandaCobotController::checkThresholds(const std::array<double, 7> &joint_collision, const std::array<double, 6> &cart_collision)
+  {
+    // First check joint torques
+    for (int i = 0; i < 7; i++)
+    {
+      if (joint_collision[i])
+      {
+        try
+        {
+          franka::Robot robot(robot_address);
+          robot.automaticErrorRecovery();
+          continue;
+        }
+        catch (const std::exception &rec_ex)
+        {
+          ROS_ERROR_STREAM("Robot Recovery Failed: " << rec_ex.what());
+        }
+      }
+      // ROS_INFO_STREAM("Joint " << i << " Torque: " << tau_d(i) << "/" << std::min(upper_torque_acc[i], upper_torque_nom[i]));
+    }
+    // Second check external force
+    std::vector<std::string> forces = {"Fx", "Fy", "Fz", "Rx", "Ry", "Rz"};
+    for (int i = 0; i < 6; i++)
+    {
+      if (cart_collision[i])
+      {
+        try
+        {
+          franka::Robot robot(robot_address);
+          robot.automaticErrorRecovery();
+          continue;
+        }
+        catch (const std::exception &rec_ex)
+        {
+          ROS_ERROR_STREAM("Robot Recovery Failed: " << rec_ex.what());
+        }
+      }
+      // ROS_INFO_STREAM(forces[i] << ": " << f_ext[i] << "/" << std::min(upper_force_acc[i], upper_force_nom[i]));
     }
   }
 

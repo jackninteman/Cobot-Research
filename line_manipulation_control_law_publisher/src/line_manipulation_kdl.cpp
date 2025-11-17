@@ -63,11 +63,18 @@ ros::Publisher twist_pub_;
 ros::Publisher matrix_pub;
 // ROS publishers for test visualization
 ros::Publisher fext_ee_pub_;
+ros::Publisher tauext_ee_pub_;
 ros::Publisher cur_pos_ee_pub_;
 ros::Publisher des_pos_ee_pub_;
 ros::Publisher cur_rot_pub_;
 ros::Publisher des_rot_pub_;
 ros::Publisher k_switch_pub_;
+ros::Publisher torque_lower_pub_;
+ros::Publisher torque_upper_pub_;
+ros::Publisher force_lower_pub_;
+ros::Publisher force_upper_pub_;
+ros::Publisher tau_d_pub_;
+ros::Publisher time_now_pub_;
 KDL::ChainDynParam *dyn_solver_raw_;
 KDL::ChainJntToJacSolver *jac_solver_raw_;
 KDL::ChainFkSolverPos_recursive *fk_solver_raw_;
@@ -82,7 +89,13 @@ KDL::JntArray effort_;
 KDL::Frame ee_tf_;
 KDL::Frame force_frame_tf_;
 Eigen::Vector3d ext_force_body;
-Eigen::Vector4d Fext_homogeneous;
+Eigen::Vector3d Fext;
+
+geometry_msgs::Vector3 Tauext_ee_placeholder;
+std_msgs::Float64MultiArray force_lower_placeholder;
+std_msgs::Float64MultiArray force_upper_placeholder;
+std_msgs::Float64MultiArray torque_lower_placeholder;
+std_msgs::Float64MultiArray torque_upper_placeholder;
 
 // Points for line and plane
 std::vector<Eigen::Vector3d> line_plane_points;
@@ -167,20 +180,58 @@ int main(int argc, char **argv)
     traj_pub_ = ros_node->advertise<geometry_msgs::Pose>("/traj", 1);
     twist_pub_ = ros_node->advertise<geometry_msgs::Twist>("/twist", 1);
 
-    // Publishers for test results
-    ros::Publisher fext_ee_;
-    ros::Publisher cur_pos_ee;
-    ros::Publisher des_pos_ee;
-    ros::Publisher cur_rot;
-    ros::Publisher des_rot;
-    ros::Publisher k_switch;
-
+    // Publishers
     fext_ee_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/f_ext", 1);
+    tauext_ee_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/tau_ext", 1);
     cur_pos_ee_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/cur_pos_ee", 1);
     des_pos_ee_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/des_pos_ee", 1);
     cur_rot_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/cur_rot", 1);
     des_rot_pub_ = ros_node->advertise<geometry_msgs::Vector3>("/des_rot", 1);
     k_switch_pub_ = ros_node->advertise<std_msgs::Float64MultiArray>("/k_switch", 1);
+    time_now_pub_ = ros_node->advertise<std_msgs::Float64>("/time_now", 1);
+    torque_lower_pub_ = ros_node->advertise<std_msgs::Float64MultiArray>("/torque_lower", 1);
+    torque_upper_pub_ = ros_node->advertise<std_msgs::Float64MultiArray>("/torque_upper", 1);
+    force_lower_pub_ = ros_node->advertise<std_msgs::Float64MultiArray>("/force_lower", 1);
+    force_upper_pub_ = ros_node->advertise<std_msgs::Float64MultiArray>("/force_upper", 1);
+    tau_d_pub_ = ros_node->advertise<std_msgs::Float64MultiArray>("/tau_d", 1);
+
+    Tauext_ee_placeholder.x = 0.0;
+    Tauext_ee_placeholder.y = 0.0;
+    Tauext_ee_placeholder.z = 0.0;
+
+    force_lower_placeholder.data.resize(6);
+    force_lower_placeholder.data[0] = 0.0;
+    force_lower_placeholder.data[1] = 0.0;
+    force_lower_placeholder.data[2] = 0.0;
+    force_lower_placeholder.data[3] = 0.0;
+    force_lower_placeholder.data[4] = 0.0;
+    force_lower_placeholder.data[5] = 0.0;
+
+    force_upper_placeholder.data.resize(6);
+    force_upper_placeholder.data[0] = 0.0;
+    force_upper_placeholder.data[1] = 0.0;
+    force_upper_placeholder.data[2] = 0.0;
+    force_upper_placeholder.data[3] = 0.0;
+    force_upper_placeholder.data[4] = 0.0;
+    force_upper_placeholder.data[5] = 0.0;
+
+    torque_lower_placeholder.data.resize(7);
+    torque_lower_placeholder.data[0] = 0.0;
+    torque_lower_placeholder.data[1] = 0.0;
+    torque_lower_placeholder.data[2] = 0.0;
+    torque_lower_placeholder.data[3] = 0.0;
+    torque_lower_placeholder.data[4] = 0.0;
+    torque_lower_placeholder.data[5] = 0.0;
+    torque_lower_placeholder.data[6] = 0.0;
+
+    torque_upper_placeholder.data.resize(7);
+    torque_upper_placeholder.data[0] = 0.0;
+    torque_upper_placeholder.data[1] = 0.0;
+    torque_upper_placeholder.data[2] = 0.0;
+    torque_upper_placeholder.data[3] = 0.0;
+    torque_upper_placeholder.data[4] = 0.0;
+    torque_upper_placeholder.data[5] = 0.0;
+    torque_upper_placeholder.data[6] = 0.0;
 
     // Setup subscriber to joint state controller
     // Whenever we receive actual joint states, we will use callback function above to publish desired joint states
@@ -340,6 +391,9 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
 
     // Get time now
     double time_in_sec = ros::Time::now().toSec();
+    std_msgs::Float64 time_now;
+    time_now.data = time_in_sec;
+    time_now_pub_.publish(time_now);
 
     // Compute dynamics param, jacobian, and forward kinematics
     dyn_solver_raw_->JntToGravity(q_, G_);
@@ -478,6 +532,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     }
 #endif
     Eigen::Vector3d e_n(0, 0, 1);
+    // Normalize the error vector to get a unit vector
     if (error.head(3).norm() != 0)
     {
         e_n = -error.head(3) / error.head(3).norm();
@@ -766,7 +821,7 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix<double, 7, 1> tau_d;
     // tau_d = J_.data.transpose()*(R*K_des*R.transpose()*error + R*C_des*R.transpose()*(R*desired_velocity_frenet-J_.data*q_dot_.data)) + G_.data + C_.data;
     // double time_begin_in_sec;
-    std::cout << "Time now:" << time_in_sec << std::endl;
+    // std::cout << "Time now:" << time_in_sec << std::endl;
     // if (time_in_sec > 1000.0)
     // {
     // if(start_flag){
@@ -935,14 +990,16 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     des_rot_pub_.publish(desired_orientation_euler_final);
 
     // Fext in the EE frame
-    Eigen::Vector4d Fext_ee_homogeneous = T * Fext_homogeneous;
-    Eigen::Vector3d Fext_ee = Fext_ee_homogeneous.head<3>();
+    Eigen::Vector3d Fext_ee = R3_3 * Fext;
     // std::cout << "ee position: " << current_position_ee << std::endl;
     geometry_msgs::Vector3 Fext_ee_final;
     Fext_ee_final.x = Fext_ee.x();
     Fext_ee_final.y = Fext_ee.y();
     Fext_ee_final.z = Fext_ee.z();
     fext_ee_pub_.publish(Fext_ee_final);
+
+    // Tauext in the EE frame
+    tauext_ee_pub_.publish(Tauext_ee_placeholder);
 
     // K_switch matrix
     std_msgs::Float64MultiArray k_switch_final;
@@ -963,6 +1020,22 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
         }
     }
     k_switch_pub_.publish(k_switch_final);
+
+    // Force lower and upper limits
+    force_lower_pub_.publish(force_lower_placeholder);
+    force_upper_pub_.publish(force_upper_placeholder);
+
+    // Torque lower and upper limits
+    torque_lower_pub_.publish(torque_lower_placeholder);
+    torque_upper_pub_.publish(torque_upper_placeholder);
+
+    std_msgs::Float64MultiArray tau_d_msg;
+    tau_d_msg.data.resize(tau_d.size());
+    for (int i = 0; i < tau_d.size(); ++i)
+    {
+        tau_d_msg.data[i] = tau_d(i);
+    }
+    tau_d_pub_.publish(tau_d_msg);
 }
 
 void ForceSensorPublisher(const geometry_msgs::WrenchStamped::ConstPtr &forceSensorPtr_)
@@ -1049,10 +1122,10 @@ uint8_t CheckOctant(Eigen::Vector3d e_t)
 
 void fextCallback(const geometry_msgs::Point::ConstPtr &msg)
 {
-    // update the homogeneous f_ext vector
-    Fext_homogeneous
+    // update the f_ext vector
+    Fext
         << msg->x,
-        msg->y, msg->z, 1.0;
+        msg->y, msg->z;
 }
 
 void hybridModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg)

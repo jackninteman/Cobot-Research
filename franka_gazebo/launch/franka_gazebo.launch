@@ -27,5 +27,7 @@
   <include file="$(find franka_gazebo)/launch/franka_controller.launch"/>
 
   <include file="$(find line_manipulation_control_law_publisher)/launch/control_law_and_rviz_display.launch"/>
+
+  <node name="rqt" pkg="rqt_gui" type="rqt_gui" args="--perspective-file $(find rqt_cobot)/config/cobot_gui.perspective" output="screen"/>
 </launch>
 

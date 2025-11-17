@@ -1,0 +1,11 @@
+<launch>
+  <!-- You may omit launching roscore, assuming you run it externally -->
+  
+  <!-- Launch your core robot / controller node(s) -->
+  
+  <!-- Launch any other necessary nodes (sensors, state publishers, etc) -->
+  
+  <!-- Launch rqt, pointing at your plugin / perspective -->
+  <!-- <node name="rqt" pkg="rqt_gui" type="rqt_gui" output="screen"/> -->
+  <node name="rqt" pkg="rqt_gui" type="rqt_gui" args="--perspective-file $(find rqt_cobot)/config/cobot_gui.perspective" output="screen"/>
+</launch>

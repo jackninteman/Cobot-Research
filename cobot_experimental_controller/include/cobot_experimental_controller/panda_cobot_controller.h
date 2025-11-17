@@ -21,6 +21,8 @@
 
 #include <sensor_msgs/Joy.h>
 #include "std_msgs/UInt8MultiArray.h"
+#include "std_msgs/Float64MultiArray.h"
+#include "std_msgs/Float64.h"
 #include "cobot_experimental_controller/PointArray.h"
 
 namespace cobot_experimental_controller
@@ -83,6 +85,17 @@ namespace cobot_experimental_controller
     std::vector<uint8_t> hybrid_mode_list = DEFAULT_MODE;
     int desired_mode_idx = 0;
 
+    std::vector<double> lower_torque_acc;
+    std::vector<double> upper_torque_acc;
+    std::vector<double> lower_torque_nom;
+    std::vector<double> upper_torque_nom;
+    std::vector<double> lower_force_acc;
+    std::vector<double> upper_force_acc;
+    std::vector<double> lower_force_nom;
+    std::vector<double> upper_force_nom;
+
+    std::string robot_address = "192.168.1.200";
+
     // Equilibrium pose subscriber
     ros::Subscriber sub_equilibrium_pose_;
     ros::Subscriber hybrid_mode_sub;
@@ -92,15 +105,26 @@ namespace cobot_experimental_controller
     ros::Publisher pose_pub_;
     ros::Publisher traj_pub_;
     ros::Publisher fext_ee_pub_;
+    ros::Publisher tauext_ee_pub_;
     ros::Publisher cur_pos_ee_pub_;
     ros::Publisher des_pos_ee_pub_;
     ros::Publisher k_switch_pub_;
+    ros::Publisher torque_lower_pub_;
+    ros::Publisher torque_upper_pub_;
+    ros::Publisher force_lower_pub_;
+    ros::Publisher force_upper_pub_;
+    ros::Publisher tau_d_pub_;
+    ros::Publisher time_now_pub_;
+    ros::Publisher joint_collision_pub_;
+    ros::Publisher cart_collision_pub_;
     void equilibriumPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg);
     void hybridModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg);
     void linePlaneCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);
     void circleCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);
     void splineCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);
     uint8_t CheckOctant(Eigen::Vector3d e_t);
+    std::vector<double> readCollisionThreshold(const ros::NodeHandle &nh, const std::string &name, const std::vector<double> &defaults);
+    void checkThresholds(const std::array<double, 7> &joint_collision, const std::array<double, 6> &cart_collision);
   };
 
 } // namespace franka_example_controllers

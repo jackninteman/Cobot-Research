@@ -100,23 +100,23 @@ target_include_directories(cobot_experimental_controller PUBLIC
   include
 )
 
-add_executable(teleop_gripper_node
-  src/teleop_gripper_node.cpp
-)
-target_include_directories(teleop_gripper_node PUBLIC
-  ${catkin_INCLUDE_DIRS}
-)
-target_link_libraries(teleop_gripper_node PUBLIC
-  ${Franka_LIBRARIES}
-  ${catkin_LIBRARIES}
-)
-add_dependencies(teleop_gripper_node
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  ${PROJECT_NAME}_generate_messages_cpp
-  ${PROJECT_NAME}_gencpp
-  ${PROJECT_NAME}_gencfg
-)
+# add_executable(teleop_gripper_node
+#   src/teleop_gripper_node.cpp
+# )
+# target_include_directories(teleop_gripper_node PUBLIC
+#   ${catkin_INCLUDE_DIRS}
+# )
+# target_link_libraries(teleop_gripper_node PUBLIC
+#   ${Franka_LIBRARIES}
+#   ${catkin_LIBRARIES}
+# )
+# add_dependencies(teleop_gripper_node
+#   ${${PROJECT_NAME}_EXPORTED_TARGETS}
+#   ${catkin_EXPORTED_TARGETS}
+#   ${PROJECT_NAME}_generate_messages_cpp
+#   ${PROJECT_NAME}_gencpp
+#   ${PROJECT_NAME}_gencfg
+# )
 
 ## Installation
 install(TARGETS cobot_experimental_controller

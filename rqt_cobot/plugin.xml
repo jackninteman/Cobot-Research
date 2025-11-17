@@ -1,0 +1,20 @@
+<library path="src">
+  <class name="Cobot Plugin" type="rqt_cobot.my_module.CobotPlugin" base_class_type="rqt_gui_py::Plugin">
+    <description>
+      A Python GUI plugin created for the Cobot Research Project.
+    </description>
+    <qtgui>
+      <!-- optional grouping...
+      <group>
+        <label>Group</label>
+      </group>
+      <group>
+        <label>Subgroup</label>
+      </group>
+      -->
+      <label>Cobot GUI</label>
+      <icon type="theme">system-help</icon>
+      <statustip>User interface to track live values and status.</statustip>
+    </qtgui>
+  </class>
+</library>
