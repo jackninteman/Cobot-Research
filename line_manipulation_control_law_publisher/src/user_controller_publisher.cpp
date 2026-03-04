@@ -18,6 +18,7 @@
 #include "std_msgs/UInt8MultiArray.h"
 #include "std_msgs/Float64.h"
 #include "std_msgs/String.h"
+#include "std_msgs/UInt8.h"
 #include <ros/callback_queue.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
@@ -37,6 +38,9 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_);
 ros::Publisher hybrid_mode_pub_;
 ros::Publisher hybrid_mode_string_pub_;
 ros::Publisher f_ext_raw_pub_;
+ros::Publisher mode_switch_flag_pub_;
+
+std_msgs::UInt8 flag;
 
 int main(int argc, char **argv)
 {
@@ -58,6 +62,8 @@ int main(int argc, char **argv)
 
     f_ext_raw_pub_ = nh->advertise<geometry_msgs::Point>("/f_ext_raw", 10);
 
+    mode_switch_flag_pub_ = nh->advertise<std_msgs::UInt8>("/mode_switch_flag", 10);
+
     // Setup apply body wrench service client
     wrench_client = nh->serviceClient<gazebo_msgs::ApplyBodyWrench>("/gazebo/apply_body_wrench");
 
@@ -74,11 +80,11 @@ int main(int argc, char **argv)
 
         f_ext_raw_pub_.publish(point_msg);
 
-        // Always publish the current hybrid mode
-        std_msgs::UInt8MultiArray hybrid_mode;
-        hybrid_mode.data = hybrid_mode_list;
-        hybrid_mode_pub_.publish(hybrid_mode);
-        hybrid_mode_string_pub_.publish(cur_mode_string);
+        mode_switch_flag_pub_.publish(flag);
+        if (flag.data)
+        {
+            flag.data = 0;
+        }
 
         ros::spinOnce();
         rate.sleep();
@@ -94,6 +100,7 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
     bool buttonA = joystickhandlePtr_->buttons[1];                  // A button
     bool buttonB = joystickhandlePtr_->buttons[2];                  // B button
     bool buttonY = joystickhandlePtr_->buttons[3];                  // Y button
+    bool buttonL2 = joystickhandlePtr_->buttons[6];                 // L2 button
     bool buttonR2 = joystickhandlePtr_->buttons[7];                 // R2 button
 
     double max_force = 20;
@@ -112,41 +119,54 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
         // LINE
         desired_mode_idx = LINE_MODE_IDX;
         cur_mode_string.data = MODE_STRINGS[LINE_MODE_IDX];
+        flag.data = 1;
     }
     else if (buttonB)
     {
         // PLANE
-        desired_mode_idx = PLANE_MODE_IDX;
-        cur_mode_string.data = MODE_STRINGS[PLANE_MODE_IDX];
+        desired_mode_idx = PLANE_2D_MODE_IDX;
+        cur_mode_string.data = MODE_STRINGS[PLANE_2D_MODE_IDX];
+        flag.data = 1;
     }
     else if (buttonY)
     {
         // CIRCLE
         desired_mode_idx = CIRCLE_MODE_IDX;
         cur_mode_string.data = MODE_STRINGS[CIRCLE_MODE_IDX];
+        flag.data = 1;
     }
     else if (buttonX)
     {
         // SPLINE
         desired_mode_idx = SPLINE_MODE_IDX;
         cur_mode_string.data = MODE_STRINGS[SPLINE_MODE_IDX];
+        flag.data = 1;
     }
-    // Update hybrid mode list based on button inputs
-    for (int i = 0; i < NUM_MODES; i++)
+    else if (buttonL2)
     {
-        if (i == desired_mode_idx)
-        {
-            hybrid_mode_list[i] = 1;
-        }
-        else
-        {
-            hybrid_mode_list[i] = 0;
-        }
+        // Simple 3D Plane
+        desired_mode_idx = PLANE_3D_MODE_IDX;
+        cur_mode_string.data = MODE_STRINGS[PLANE_3D_MODE_IDX];
+        flag.data = 1;
     }
-
-    // Always publish the current hybrid mode
-    std_msgs::UInt8MultiArray hybrid_mode;
-    hybrid_mode.data = hybrid_mode_list;
-    hybrid_mode_pub_.publish(hybrid_mode);
-    hybrid_mode_string_pub_.publish(cur_mode_string);
+    if (flag.data)
+    {
+        // Update hybrid mode list based on button inputs
+        for (int i = 0; i < NUM_MODES; i++)
+        {
+            if (i == desired_mode_idx)
+            {
+                hybrid_mode_list[i] = 1;
+            }
+            else
+            {
+                hybrid_mode_list[i] = 0;
+            }
+        }
+        // Always publish the current hybrid mode
+        std_msgs::UInt8MultiArray hybrid_mode;
+        hybrid_mode.data = hybrid_mode_list;
+        hybrid_mode_pub_.publish(hybrid_mode);
+        hybrid_mode_string_pub_.publish(cur_mode_string);
+    }
 }

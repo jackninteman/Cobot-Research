@@ -8,7 +8,7 @@ from python_qt_binding import loadUi
 from python_qt_binding.QtWidgets import QWidget, QTableWidgetItem, QTableWidget, QTextEdit
 # import python_qt_binding.QtCore as QtCore
 from python_qt_binding.QtCore import QObject, Signal, Slot, QTimer
-from std_msgs.msg import String, Float64, Float64MultiArray
+from std_msgs.msg import String, Float64, Float64MultiArray, UInt8MultiArray
 from geometry_msgs.msg import Vector3
 from python_qt_binding.QtGui import QColor, QTextCursor
 # from PyQt5.QtCore import Qt
@@ -16,6 +16,8 @@ from python_qt_binding.QtGui import QColor, QTextCursor
 class Signaller(QObject):
     mode_changed = Signal(str)
     time_changed = Signal(str)
+    mode_selection = Signal(int)
+    orientation_selction = Signal(int)
     wrench_table_signal = Signal(int, int, float)
     torque_table_signal = Signal(int, int, float)
     error_signal = Signal(str)
@@ -95,6 +97,10 @@ class CobotPlugin(Plugin):
         self.signaller = Signaller()
         self.signaller.mode_changed.connect(self.on_mode_changed)
         self.signaller.time_changed.connect(self.on_time_changed)
+        self._widget.modeSelectionBox.currentIndexChanged.connect(self.on_mode_selection)
+        self.signaller.mode_selection.connect(self.on_mode_selection)
+        self._widget.orientationSelectionBox.currentIndexChanged.connect(self.on_orientation_selection)
+        self.signaller.orientation_selction.connect(self.on_orientation_selection)
         self.signaller.wrench_table_signal.connect(self.on_wrench_changed)
         self.signaller.torque_table_signal.connect(self.on_torque_changed)
         self.signaller.error_signal.connect(self.on_error_changed)
@@ -109,6 +115,10 @@ class CobotPlugin(Plugin):
         # Add widget to the user interface
         context.add_widget(self._widget)
 
+        self.mode_pub = rospy.Publisher("/hybrid_mode", UInt8MultiArray, queue_size=1)
+        self.mode_text_sub = rospy.Publisher("/hybrid_mode_string", String, queue_size=1)
+        self.orientation_pub = rospy.Publisher("orientation_mode", UInt8MultiArray, queue_size=1)
+
         # Subscribe to the ROS topics
         self.mode_sub = rospy.Subscriber('/hybrid_mode_string', String, self.hybrid_mode_callback, queue_size=10)
         self.time_sub = rospy.Subscriber('/time_now', Float64, self.time_now_callback, queue_size=10)
@@ -116,7 +126,7 @@ class CobotPlugin(Plugin):
         self.tau_sense_sub = rospy.Subscriber('/tau_ext', Vector3, self.tau_sense_callback, queue_size=10)
         self.wrench_thresh_sub = rospy.Subscriber('/force_upper', Float64MultiArray, self.wrench_thresh_callback, queue_size=10)
         self.wrench_warn_sub = rospy.Subscriber('/force_lower', Float64MultiArray, self.wrench_warn_callback, queue_size=10)
-        self.tau_d_sub = rospy.Subscriber('/tau_d', Float64MultiArray, self.tau_d_callback, queue_size=10)
+        self.tau_d_sub = rospy.Subscriber('/tau_hat', Float64MultiArray, self.tau_d_callback, queue_size=10)
         self.tau_thresh_sub = rospy.Subscriber('/torque_upper', Float64MultiArray, self.tau_thresh_callback, queue_size=10)
         self.tau_warn_sub = rospy.Subscriber('/torque_lower', Float64MultiArray, self.tau_warn_callback, queue_size=10)
         self.joint_collision_sub = rospy.Subscriber('/join_collision', Float64MultiArray, self.joint_collision_callback, queue_size=10)
@@ -194,57 +204,22 @@ class CobotPlugin(Plugin):
     # Callback for hybrid mode
     def hybrid_mode_callback(self, msg):
         self.latest_hybrid_mode = msg
-        # now = time.time()
-        # if now - self.hybrid_mode_last_update > 1.0 / self.update_rate:
-        #     self.hybrid_mode_last_update = now
-        #     # This runs in ROS subscriber thread
-        #     data_str = "Selected Hybrid Mode: " + msg.data
-        #     # Emit via signal to GUI thread
-        #     self.signaller.mode_changed.emit(data_str)
 
     # Callback for run time
     def time_now_callback(self, msg):
         self.latest_time_now = msg
-        # now = time.time()
-        # if now - self.time_now_last_update > 1.0 / self.update_rate:
-        #     self.time_now_last_update = now
-        #     # This runs in ROS subscriber thread
-        #     time_str = f'{msg.data:.2f}'
-        #     data_str = "Run Time: " + time_str + " sec"
-        #     # Emit via signal to GUI thread
-        #     self.signaller.time_changed.emit(data_str)
 
     # Callback for sensed external forces
     def f_sense_callback(self, msg):
         self.latest_f_sense = msg
-        # now = time.time()
-        # if now - self.f_sense_last_update > 1.0 / self.update_rate:
-        #     self.f_sense_last_update = now            
-        #     self.signaller.wrench_table_signal.emit(1, 0, msg.x)
-        #     self.signaller.wrench_table_signal.emit(1, 1, msg.y)
-        #     self.signaller.wrench_table_signal.emit(1, 2, msg.z)
 
     # Callback for sensed external torques
     def tau_sense_callback(self, msg):
         self.latest_tau_sense = msg
-        # now = time.time()
-        # if now - self.tau_sense_last_update > 1.0 / self.update_rate:
-        #     self.tau_sense_last_update = now
-        #     self.signaller.wrench_table_signal.emit(1, 3, msg.x)
-        #     self.signaller.wrench_table_signal.emit(1, 4, msg.y)
-        #     self.signaller.wrench_table_signal.emit(1, 5, msg.z)
 
     # Callback for upper wrench limits
     def wrench_thresh_callback(self, msg):
         self.latest_wrench_thresh = msg
-        # now = time.time()
-        # if now - self.wrench_thresh_last_update > 1.0 / self.update_rate:
-        #     self.wrench_thresh_last_update = now
-        #     row = 0
-        #     for col in range(6):
-        #         value = msg.data[col]
-        #         self.wrench_thresh[col] = value
-        #         self.signaller.wrench_table_signal.emit(row, col, value)
 
     # Callback for lower wrench limits
     def wrench_warn_callback(self, msg):
@@ -255,25 +230,10 @@ class CobotPlugin(Plugin):
     # Callback for desired joint torques
     def tau_d_callback(self, msg):
         self.latest_tau_d = msg
-        # now = time.time()
-        # if now - self.tau_d_last_update > 1.0 / self.update_rate:
-        #     self.tau_d_last_update = now
-        #     row = 1
-        #     for col in range(7):
-        #         value = msg.data[col]
-        #         self.signaller.torque_table_signal.emit(row, col, value)
 
     # Callback for upper joint torque limits
     def tau_thresh_callback(self, msg):
         self.latest_tau_thresh = msg
-        # now = time.time()
-        # if now - self.tau_thresh_last_update > 1.0 / self.update_rate:
-        #     self.tau_thresh_last_update = now
-        #     row = 0
-        #     for col in range(7):
-        #         value = msg.data[col]
-        #         self.torque_thresh[col] = value
-        #         self.signaller.torque_table_signal.emit(row, col, value)
 
     # Callback for lower joint torque limits
     def tau_warn_callback(self, msg):
@@ -390,6 +350,32 @@ class CobotPlugin(Plugin):
     def on_time_changed(self, data_str):
         # This runs in Qt GUI thread
         self._widget.timeNow.setText(data_str)
+
+    @Slot(int)
+    def on_mode_selection(self, idx):
+        num_modes = self._widget.modeSelectionBox.count()
+
+        msg = UInt8MultiArray()
+        msg.data = [0] * num_modes
+        msg.data[idx] = 1
+
+        self.mode_pub.publish(msg)
+
+        mode_strings = ["LINE", "PLANE", "CIRCLE", "SPLINE", "3D PLANE"]
+        msg = String()
+        msg.data = mode_strings[idx]
+
+        self.mode_text_sub.publish(msg)
+
+    @Slot(int)
+    def on_orientation_selection(self, idx):
+        num_modes = self._widget.orientationSelectionBox.count()
+
+        msg = UInt8MultiArray()
+        msg.data = [0] * num_modes
+        msg.data[idx] = 1
+
+        self.orientation_pub.publish(msg)
 
     @Slot(int, int, float)
     def on_wrench_changed(self, row, col, value):

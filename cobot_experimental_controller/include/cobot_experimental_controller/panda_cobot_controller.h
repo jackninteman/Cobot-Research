@@ -23,6 +23,7 @@
 #include "std_msgs/UInt8MultiArray.h"
 #include "std_msgs/Float64MultiArray.h"
 #include "std_msgs/Float64.h"
+#include "std_msgs/UInt8.h"
 #include "cobot_experimental_controller/PointArray.h"
 
 namespace cobot_experimental_controller
@@ -30,14 +31,22 @@ namespace cobot_experimental_controller
 
 #define HYBRID
 
-#define NUM_MODES (4)
+#define NUM_MODES (5)
 
 #define LINE_MODE_IDX (0)
-#define PLANE_MODE_IDX (1)
+#define PLANE_2D_MODE_IDX (1)
 #define CIRCLE_MODE_IDX (2)
 #define SPLINE_MODE_IDX (3)
+#define PLANE_3D_MODE_IDX (4)
 
-#define DEFAULT_MODE std::vector<uint8_t>({1, 0, 0, 0})
+#define DEFAULT_MODE std::vector<uint8_t>({1, 0, 0, 0, 0})
+
+#define NUM_ROT_MODES (2)
+
+#define UPRIGHT_IN_WS (0)
+#define TANGENT_TO_SHAPE (1)
+
+#define DEFAULT_ROT_MODE std::vector<uint8_t>({1, 0})
 
   class PandaCobotController : public controller_interface::MultiInterfaceController<
                                    franka_hw::FrankaModelInterface,
@@ -85,6 +94,9 @@ namespace cobot_experimental_controller
     std::vector<uint8_t> hybrid_mode_list = DEFAULT_MODE;
     int desired_mode_idx = 0;
 
+    std::vector<uint8_t> rot_mode_list = DEFAULT_ROT_MODE;
+    uint8_t mode_switch_flag = 1;
+
     std::vector<double> lower_torque_acc;
     std::vector<double> upper_torque_acc;
     std::vector<double> lower_torque_nom;
@@ -99,32 +111,42 @@ namespace cobot_experimental_controller
     // Equilibrium pose subscriber
     ros::Subscriber sub_equilibrium_pose_;
     ros::Subscriber hybrid_mode_sub;
+    ros::Subscriber orientation_mode_sub;
     ros::Subscriber line_plane_sub;
     ros::Subscriber circle_sub;
     ros::Subscriber spline_sub;
+    ros::Subscriber plane_3d_points_sub;
+    ros::Subscriber plane_3d_T_sub;
+    ros::Subscriber mode_switch_flag_sub;
     ros::Publisher pose_pub_;
     ros::Publisher traj_pub_;
     ros::Publisher fext_ee_pub_;
     ros::Publisher tauext_ee_pub_;
     ros::Publisher cur_pos_ee_pub_;
     ros::Publisher des_pos_ee_pub_;
+    ros::Publisher rot_error_vec_pub_;
     ros::Publisher k_switch_pub_;
     ros::Publisher torque_lower_pub_;
     ros::Publisher torque_upper_pub_;
     ros::Publisher force_lower_pub_;
     ros::Publisher force_upper_pub_;
     ros::Publisher tau_d_pub_;
+    ros::Publisher tau_hat_pub_;
     ros::Publisher time_now_pub_;
     ros::Publisher joint_collision_pub_;
     ros::Publisher cart_collision_pub_;
+    ros::Publisher x_dot_pub_;
     void equilibriumPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg);
     void hybridModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg);
+    void orientationModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg);
     void linePlaneCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);
     void circleCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);
     void splineCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);
+    void plane3dCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);
+    void plane3dTCallback(const std_msgs::Float64MultiArray::ConstPtr &msg);
+    void modeSwitchFlagCallback(const std_msgs::UInt8::ConstPtr &msg);
     uint8_t CheckOctant(Eigen::Vector3d e_t);
     std::vector<double> readCollisionThreshold(const ros::NodeHandle &nh, const std::string &name, const std::vector<double> &defaults);
-    void checkThresholds(const std::array<double, 7> &joint_collision, const std::array<double, 6> &cart_collision);
   };
 
 } // namespace franka_example_controllers

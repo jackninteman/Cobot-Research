@@ -17,9 +17,10 @@
 
 #include <space_manipulation/circle3d.h>
 #include <space_manipulation/line3d.h>
-#include <space_manipulation/plane3d.h>
+#include <space_manipulation/plane2d.h>
 #include "cobot_experimental_controller/pseudo_inversion.h"
 #include "space_manipulation/spline3d.h"
+#include "space_manipulation/plane3d.h"
 
 #include <sensor_msgs/Joy.h>
 #include <Eigen/Geometry>
@@ -39,17 +40,23 @@ namespace cobot_experimental_controller
   std::vector<Eigen::Vector3d> spline_points;
   bool spline_init = false;
   bool spline_class_init = false;
+  // Points for simple 3d plane
+  Eigen::Matrix<double, 4, 4> T_plane_3d;
+  std::vector<Eigen::Vector3d> plane_3d_points;
+  bool plane_3d_init = false;
+  bool plane_3d_class_init = false;
 
 // 2) Choose line or plane or circle objects
 #ifdef HYBRID
   // Declare line, plane, circle, and spline parameters
   std::shared_ptr<Line3d> line;
   double distance_param;
-  std::shared_ptr<Plane3d> plane;
+  std::shared_ptr<Plane2d> plane_2d;
   double distance_param_x, distance_param_y;
   std::shared_ptr<Circle3d> circle;
   double theta_param;
   std::shared_ptr<Spline3d> spline;
+  std::shared_ptr<Plane3d> plane_3d;
 #endif
 
   bool PandaCobotController::init(hardware_interface::RobotHW *robot_hw,
@@ -93,9 +100,12 @@ namespace cobot_experimental_controller
     des_pos_ee_pub_ = node_handle.advertise<geometry_msgs::Vector3>("/des_pos_ee", 1);
     k_switch_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/k_switch", 1);
     tau_d_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/tau_d", 1);
+    tau_hat_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/tau_hat", 1);
     time_now_pub_ = node_handle.advertise<std_msgs::Float64>("/time_now", 1);
     joint_collision_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/joint_collision", 1);
     cart_collision_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/cart_collision", 1);
+    rot_error_vec_pub_ = node_handle.advertise<geometry_msgs::Vector3>("/rot_error_vec", 1);
+    x_dot_pub_ = node_handle.advertise<std_msgs::Float64MultiArray>("/x_dot", 1);
 
     sub_equilibrium_pose_ =
         node_handle.subscribe("/equilibrium_pose", 20, &PandaCobotController::equilibriumPoseCallback,
@@ -103,6 +113,9 @@ namespace cobot_experimental_controller
 
     // Setup subscriber to hybrid_mode
     hybrid_mode_sub = node_handle.subscribe("/hybrid_mode", 10, &PandaCobotController::hybridModeCallback, this, ros::TransportHints().reliable().tcpNoDelay());
+
+    // Setup subscriber to orientation_mode
+    orientation_mode_sub = node_handle.subscribe("/orientation_mode", 10, &PandaCobotController::orientationModeCallback, this, ros::TransportHints().reliable().tcpNoDelay());
 
     // Setup subscriber to line_plane_points
     line_plane_sub = node_handle.subscribe("/line_plane_points", 10, &PandaCobotController::linePlaneCallback, this, ros::TransportHints().reliable().tcpNoDelay());
@@ -112,6 +125,14 @@ namespace cobot_experimental_controller
 
     // Setup subscriber to spline_points
     spline_sub = node_handle.subscribe("/spline_points", 10, &PandaCobotController::splineCallback, this, ros::TransportHints().reliable().tcpNoDelay());
+
+    // Setup subscriber to simple 3d plane points
+    plane_3d_points_sub = node_handle.subscribe("/plane_3d_points", 10, &PandaCobotController::plane3dCallback, this, ros::TransportHints().reliable().tcpNoDelay());
+
+    // Setup subscriber to simple 3d plane T matrix
+    plane_3d_T_sub = node_handle.subscribe("/plane_3d_T", 10, &PandaCobotController::plane3dTCallback, this, ros::TransportHints().reliable().tcpNoDelay());
+
+    mode_switch_flag_sub = node_handle.subscribe("/mode_switch_flag", 10, &PandaCobotController::modeSwitchFlagCallback, this, ros::TransportHints().reliable().tcpNoDelay());
 
     std::string arm_id;
     if (!node_handle.getParam("arm_id", arm_id))
@@ -221,31 +242,34 @@ namespace cobot_experimental_controller
   void PandaCobotController::update(const ros::Time &time, const ros::Duration &period)
   {
     // First, check to see if geometries have been published. If they have not, we need to command the robot to remain still
-    if (line_plane_init && circle_init && spline_init)
+    if (line_plane_init && circle_init && spline_init && plane_3d_init)
     {
       // If geometries have been published, we only need to init the class instances once because they shapes are constant (for now)
       if (!line_plane_class_init)
       {
         time_begin_in_sec = time.now().toSec();
-        std::cout << "line_plane was init\n\n"
-                  << std::endl;
+        ROS_INFO_STREAM("line & plane was init\n\n");
         line = std::make_shared<Line3d>(line_plane_points[0], line_plane_points[1]);
-        plane = std::make_shared<Plane3d>(line_plane_points[0], line_plane_points[1], line_plane_points[2]);
+        plane_2d = std::make_shared<Plane2d>(line_plane_points[0], line_plane_points[1], line_plane_points[2]);
         line_plane_class_init = true;
       }
       if (!circle_class_init)
       {
-        std::cout << "circle was init\n\n"
-                  << std::endl;
+        ROS_INFO_STREAM("circle was init\n\n");
         circle = std::make_shared<Circle3d>(circle_points[0], circle_points[1], circle_points[2]);
         circle_class_init = true;
       }
       if (!spline_class_init)
       {
-        std::cout << "spline was init\n\n"
-                  << std::endl;
+        ROS_INFO_STREAM("spline was init\n\n");
         spline = std::make_shared<Spline3d>(spline_points);
         spline_class_init = true;
+      }
+      if (!plane_3d_class_init)
+      {
+        ROS_INFO_STREAM("simple 3d plane was init\n\n");
+        plane_3d = std::make_shared<Plane3d>(plane_3d_points);
+        plane_3d_class_init = true;
       }
     }
 
@@ -264,6 +288,8 @@ namespace cobot_experimental_controller
 
     // Estimate the external force on the end effector
     std::vector<double> external_wrench(robot_state.K_F_ext_hat_K.begin(), robot_state.K_F_ext_hat_K.end());
+    // Estimate the external torque on the end effector
+    std::vector<double> external_torque(robot_state.tau_ext_hat_filtered.begin(), robot_state.tau_ext_hat_filtered.end());
     // std::array<double, 6> external_wrench = robot_state.O_F_ext_hat_K;
     // Check which joint contact thresholds are active
     std::array<double, 7> joint_contact = robot_state.joint_contact;
@@ -330,10 +356,10 @@ namespace cobot_experimental_controller
     {
       desired_position = line->GetDesiredCrosstrackLocation(ee_translation, distance_param);
     }
-    else if (hybrid_mode_list[PLANE_MODE_IDX] && line_plane_class_init)
+    else if (hybrid_mode_list[PLANE_2D_MODE_IDX] && line_plane_class_init)
     {
       desired_position =
-          plane->GetDesiredCrosstrackLocation(ee_translation, distance_param_x, distance_param_y);
+          plane_2d->GetDesiredCrosstrackLocation(ee_translation, distance_param_x, distance_param_y);
     }
     else if (hybrid_mode_list[CIRCLE_MODE_IDX] && circle_class_init)
     {
@@ -344,7 +370,13 @@ namespace cobot_experimental_controller
       spline->FindDesiredSplinePoint(ee_translation);
       desired_position = spline->GetBestPoint();
     }
+    else if (hybrid_mode_list[PLANE_3D_MODE_IDX] && plane_3d_class_init)
+    {
+      plane_3d->FindDesired3dPlanePoint(ee_translation, T_plane_3d);
+      desired_position = plane_3d->GetBestPoint();
+    }
 #endif
+    Eigen::Vector3d desired_position_raw = desired_position;
 
 #if !defined(HYBRID)
     // This if-else is for nothing case
@@ -367,26 +399,25 @@ namespace cobot_experimental_controller
     // ----------EE Pos: Compute position and orientation error-----------
     Eigen::Matrix<double, 6, 1> error;
     uint8_t pos_error_flag = 0;
-    // Apply a filter to the position error to avoid violent movements
-    for (int i = 0; i < 3; i++)
+    Eigen::Vector3d pos_err = desired_position - current_position;
+    double pos_err_mag = pos_err.norm();
+    double error_thresh = 0.03;
+    double pos_err_scale = 1.0;
+    if (pos_err_mag > error_thresh)
     {
-      float error_thresh = 0.02;
-
-      if (desired_position[i] - current_position[i] > error_thresh)
+      pos_err_scale = error_thresh / pos_err_mag;
+      if (mode_switch_flag)
       {
-        desired_position[i] = current_position[i] + error_thresh;
-        pos_error_flag = 1;
-      }
-      else if (desired_position[i] - current_position[i] < -error_thresh)
-      {
-        desired_position[i] = current_position[i] - error_thresh;
         pos_error_flag = 1;
       }
     }
+    pos_err *= pos_err_scale;
+    if (!pos_error_flag)
+      mode_switch_flag = 0;
     // If no geometry has been initialized, manually set error to zero to force the robot to remain still.
-    if (line_plane_class_init && circle_class_init && spline_class_init)
+    if (line_plane_class_init && circle_class_init && spline_class_init && plane_3d_class_init)
     {
-      error.head(3) << desired_position - current_position;
+      error.head(3) << pos_err;
     }
     else
     {
@@ -406,10 +437,10 @@ namespace cobot_experimental_controller
     {
       e_t = line->GetLineUnitDirection();
     }
-    else if (hybrid_mode_list[PLANE_MODE_IDX] && line_plane_class_init)
+    else if (hybrid_mode_list[PLANE_2D_MODE_IDX] && line_plane_class_init)
     {
-      e_t = (plane->GetPlaneUnitDirection()).col(0);
-      e_t_plane = (plane->GetPlaneUnitDirection()).col(2);
+      e_t = (plane_2d->GetPlaneUnitDirection()).col(0);
+      e_t_plane = (plane_2d->GetPlaneUnitDirection()).col(2);
     }
     else if (hybrid_mode_list[CIRCLE_MODE_IDX] && circle_class_init)
     {
@@ -419,13 +450,24 @@ namespace cobot_experimental_controller
     {
       e_t = spline->GetBestTangent();
     }
-#endif
-    Eigen::Vector3d e_n(0, 0, 1);
-    if (error.head(3).norm() != 0)
+    else if (hybrid_mode_list[PLANE_3D_MODE_IDX] && plane_3d_class_init)
     {
-      e_n = -error.head(3) / error.head(3).norm();
+      e_t = plane_3d->GetBestTangent();
     }
-    Eigen::Vector3d e_b(e_n.cross(e_t));
+#endif
+    Eigen::Vector3d e_fallback(0, 0, 1);
+    Eigen::Vector3d e_n = -error.head(3);
+    e_n -= e_n.dot(e_t) * e_t;
+    if (e_n.norm() > 1e-6)
+    {
+      e_n.normalize();
+    }
+    else
+    {
+      e_n = e_fallback;
+    }
+    Eigen::Vector3d e_b = e_n.cross(e_t);
+    e_b.normalize();
     Eigen::Matrix<double, 3, 3> R3_3;
     R3_3 << e_t, e_b, e_n;
     Eigen::Matrix<double, 6, 6> R;
@@ -438,73 +480,35 @@ namespace cobot_experimental_controller
     // Convert current rotation matrix to Euler angles (in radians)
     Eigen::Vector3d current_thetas = cur_R.eulerAngles(0, 1, 2);
 
-    double theta_x;
-    double theta_y;
-    double theta_z;
+    Eigen::Vector3d x_unit = R3_3.col(0);
+    Eigen::Vector3d y_unit = R3_3.col(1);
+    Eigen::Vector3d z_unit = R3_3.col(2);
 
-// Calculate desired orientation depending on the current mode
-#ifdef HYBRID
-    uint8_t e_t_octant = CheckOctant(e_t);
-    uint8_t theta_y_flip = (e_t_octant == 0 || e_t_octant == 2 || e_t_octant == 5 || e_t_octant == 7);
-    uint8_t theta_z_flip = (e_t_octant == 1 || e_t_octant == 3 || e_t_octant == 5 || e_t_octant == 7);
-
-    uint8_t e_t_plane_octant = CheckOctant(e_t_plane);
-    uint8_t theta_x_neg = (e_t_plane_octant == 0 || e_t_plane_octant == 1 || e_t_plane_octant == 4 ||
-                           e_t_plane_octant == 5);
-    uint8_t theta_x_flip = (e_t_plane_octant == 2 || e_t_plane_octant == 3 || e_t_plane_octant == 4 ||
-                            e_t_plane_octant == 5);
-
-    if (hybrid_mode_list[LINE_MODE_IDX])
+    Eigen::Matrix3d R_des = R3_3;
+    if (rot_mode_list[UPRIGHT_IN_WS])
     {
-      theta_x = M_PI;
-      // Calculate the adjusted "adjacent" line length for the theta_y term
-      double new_len = sqrt(pow(e_t[0], 2) + pow(e_t[1], 2));
-      theta_y = (theta_y_flip ? -1.0 : 1.0) * std::acos(new_len);
-      // This term requires a sign flip depending on the unit direction of the defined line
-      theta_z =
-          std::atan2((theta_z_flip ? -1.0 : 1.0) * e_t[1], (theta_z_flip ? -1.0 : 1.0) * e_t[0]);
+      // rotate +180 about x
+      Eigen::AngleAxisd rot(M_PI, Eigen::Vector3d::UnitX());
+      R_des = rot.toRotationMatrix();
     }
-    else if (hybrid_mode_list[PLANE_MODE_IDX])
+    else if (rot_mode_list[TANGENT_TO_SHAPE])
     {
-      // Calculate the adjusted "adjacent" line length for the theta_x term
-      double new_len = sqrt(pow(e_t_plane[0], 2) + pow(e_t_plane[1], 2));
-      if (theta_x_flip)
+      if (z_unit.z() > 0)
       {
-        theta_x = (theta_x_neg ? -1.0 : 1.0) * ((M_PI / 2.0) + std::acos(new_len));
+        // rotate +180 about x
+        Eigen::AngleAxisd rot(M_PI, Eigen::Vector3d::UnitX());
+        Eigen::Matrix3d R_rot = rot.toRotationMatrix();
+        R_des = R3_3 * R_rot;
       }
-      else
-      {
-        theta_x = (theta_x_neg ? -1.0 : 1.0) * std::asin(new_len);
-      }
+    }
 
-      theta_y = 0.0;
-      // This term requires a sign flip depending on the unit direction of the defined plane
-      theta_z = std::atan2(e_t_plane[1], e_t_plane[0]) - (M_PI / 2.0);
-    }
-    else if (hybrid_mode_list[CIRCLE_MODE_IDX])
-    {
-      // This is just a test mode, so we don't care about orientation control here
-      theta_x = M_PI;
-      theta_y = 0.0;
-      theta_z = 0.0;
-    }
-    else if (hybrid_mode_list[SPLINE_MODE_IDX])
-    {
-      theta_x = M_PI;
-      // Calculate the adjusted "adjacent" line length for the theta_y term
-      double new_len = sqrt(pow(e_t[0], 2) + pow(e_t[1], 2));
-      theta_y = (theta_y_flip ? -1.0 : 1.0) * std::acos(new_len);
-      // This term requires a sign flip depending on the unit direction of the defined spline
-      theta_z =
-          std::atan2((theta_z_flip ? -1.0 : 1.0) * e_t[1], (theta_z_flip ? -1.0 : 1.0) * e_t[0]);
-    }
-#endif
+    Eigen::Matrix3d R_err = R_des * cur_R.transpose();
+    Eigen::AngleAxisd aa(R_err);
+    Eigen::Vector3d e_R = aa.angle() * aa.axis();
+    Eigen::Vector3d e_R_ee = cur_R.transpose() * e_R;
+    Eigen::Vector3d e_R_ee_raw = e_R_ee;
 
-    Eigen::Vector3d euler_orientation(theta_x, theta_y, theta_z);
-    Eigen::Quaterniond desired_orientation =
-        Eigen::AngleAxisd(euler_orientation[2], Eigen::Vector3d::UnitZ()) *
-        Eigen::AngleAxisd(euler_orientation[1], Eigen::Vector3d::UnitY()) *
-        Eigen::AngleAxisd(euler_orientation[0], Eigen::Vector3d::UnitX());
+    Eigen::Quaterniond desired_orientation(R_des);
 
     if (desired_orientation.coeffs().dot(current_orientation.coeffs()) < 0.0)
     {
@@ -512,30 +516,25 @@ namespace cobot_experimental_controller
     }
     Eigen::Quaterniond error_quaternion(current_orientation.inverse() * desired_orientation);
 
-    // Convert to angle-axis
-    Eigen::AngleAxisd angle_axis(error_quaternion);
-    double angle = angle_axis.angle(); // in radians
-    Eigen::Vector3d axis = angle_axis.axis();
-
     // Limit parameters
-    double angle_limit = 0.1;
+    double angle_limit = 0.075;
 
 #ifdef HYBRID
     double max_angle = 0.0;
     if (hybrid_mode_list[LINE_MODE_IDX] || hybrid_mode_list[SPLINE_MODE_IDX])
     {
       // Find the max angle axis (ignoring x) for the desired rotation
-      max_angle = std::max({abs(axis.y() * angle), abs(axis.z() * angle)});
+      max_angle = std::max({abs(e_R_ee.y()), abs(e_R_ee.z())});
     }
-    else if (hybrid_mode_list[PLANE_MODE_IDX])
+    else if (hybrid_mode_list[PLANE_2D_MODE_IDX] || hybrid_mode_list[PLANE_3D_MODE_IDX])
     {
       // Find the max angle axis (ignoring z) for the desired rotation
-      max_angle = std::max({abs(axis.x() * angle), abs(axis.y() * angle)});
+      max_angle = std::max({abs(e_R_ee.x()), abs(e_R_ee.y())});
     }
     else
     {
       // Find the max angle axis for the desired rotation
-      max_angle = std::max({abs(axis.x() * angle), abs(axis.y() * angle), abs(axis.z() * angle)});
+      max_angle = std::max({abs(e_R_ee.x()), abs(e_R_ee.y()), abs(e_R_ee.z())});
     }
 #endif
 
@@ -549,16 +548,26 @@ namespace cobot_experimental_controller
     {
       scale_factor = angle_limit / max_angle;
     }
-    angle_axis.angle() *= scale_factor;
+    e_R_ee *= scale_factor;
+    e_R = cur_R * e_R_ee;
 
     // Reconstruct limited rotation quaternion
-    Eigen::Quaterniond error_limited(angle_axis);
-    Eigen::Quaterniond q_desired = current_orientation * error_limited;
-    error.tail(3) << error_limited.x(), error_limited.y(), error_limited.z();
-    // If no geometry has been initialized, manually set error to zero to force the robot to remain still.
-    if (line_plane_class_init && circle_class_init && spline_class_init)
+    double e_theta = e_R.norm();
+    Eigen::Quaterniond error_limited;
+    if (e_theta < 1e-6)
     {
-      error.tail(3) << current_orientation * error.tail(3);
+      error_limited.setIdentity();
+    }
+    else
+    {
+      Eigen::Vector3d e_axis = e_R / e_theta;
+      error_limited = Eigen::AngleAxisd(e_theta, e_axis);
+    }
+    Eigen::Quaterniond q_desired = current_orientation * error_limited;
+    // If no geometry has been initialized, manually set error to zero to force the robot to remain still.
+    if (line_plane_class_init && circle_class_init && spline_class_init && plane_3d_class_init)
+    {
+      error.tail(3) << e_R;
     }
     else
     {
@@ -587,11 +596,13 @@ namespace cobot_experimental_controller
                      hybrid_mode_list[SPLINE_MODE_IDX];
 
     // Set switching matrix elements for orientation control
-    // Turn off stiffness in rotation about the ee x-axis in line or spline mode
-    K_switch(3, 3) =
-        (!hybrid_mode_list[LINE_MODE_IDX] && !hybrid_mode_list[SPLINE_MODE_IDX]) || pos_error_flag;
-    // Turn off stiffness in rotation about the ee z-axis in plane mode
-    K_switch(5, 5) = !hybrid_mode_list[PLANE_MODE_IDX] || pos_error_flag;
+    if (rot_mode_list[TANGENT_TO_SHAPE])
+    {
+      // Turn off rotation about the ee x-axis in line or spline mode
+      K_switch(3, 3) = (!hybrid_mode_list[LINE_MODE_IDX] && !hybrid_mode_list[SPLINE_MODE_IDX]) || pos_error_flag;
+      // Turn off rotation about the ee z-axis in 2D or 3D plane mode
+      K_switch(5, 5) = (!hybrid_mode_list[PLANE_2D_MODE_IDX] && !hybrid_mode_list[PLANE_3D_MODE_IDX]) || pos_error_flag;
+    }
 #endif
 
     // -----------Compute pseudoinverse for Jacobian transpose------------
@@ -669,6 +680,14 @@ namespace cobot_experimental_controller
                                     R * C_des * R.transpose() * (-jacobian * dq)) +
             coriolis;
 
+    Eigen::Matrix<double, 6, 1> x_dot = -jacobian * dq;
+    std_msgs::Float64MultiArray x_dot_msg;
+
+    x_dot_msg.data.clear();
+
+    x_dot_msg.data.insert(x_dot_msg.data.end(), x_dot.data(), x_dot.data() + x_dot.size());
+    x_dot_pub_.publish(x_dot_msg);
+
     //-------------Compute total control law------------------------------
     tau_d = tau_d; // + tau_null;
 
@@ -693,6 +712,12 @@ namespace cobot_experimental_controller
     traj.orientation.z = q_desired.z();
     traj.orientation.w = q_desired.w();
     traj_pub_.publish(traj);
+
+    geometry_msgs::Vector3 rot_error_vec;
+    rot_error_vec.x = abs(e_R_ee_raw[0]);
+    rot_error_vec.y = abs(e_R_ee_raw[1]);
+    rot_error_vec.z = abs(e_R_ee_raw[2]);
+    rot_error_vec_pub_.publish(rot_error_vec);
 
     // Publish a bunch of stuff to visualize results
 
@@ -782,8 +807,6 @@ namespace cobot_experimental_controller
     // Saturate torque rate to avoid discontinuities
     tau_d << saturateTorqueRate(tau_d, tau_J_d);
 
-    checkThresholds(joint_collision, cart_collision);
-
     for (size_t i = 0; i < 7; ++i)
     {
       joint_handles_[i].setCommand(tau_d(i));
@@ -796,6 +819,14 @@ namespace cobot_experimental_controller
       tau_d_msg.data[i] = tau_d(i);
     }
     tau_d_pub_.publish(tau_d_msg);
+
+    std_msgs::Float64MultiArray tau_hat_msg;
+    tau_hat_msg.data.resize(external_torque.size());
+    for (int i = 0; i < external_torque.size(); ++i)
+    {
+      tau_hat_msg.data[i] = external_torque[i];
+    }
+    tau_hat_pub_.publish(tau_hat_msg);
 
     joint_collision_pub_.publish(joint_collision_msg);
     cart_collision_pub_.publish(cart_collision_msg);
@@ -881,6 +912,12 @@ namespace cobot_experimental_controller
     hybrid_mode_list = msg->data;
   }
 
+  void PandaCobotController::orientationModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg)
+  {
+    // Copy message data into global variable
+    rot_mode_list = msg->data;
+  }
+
   void PandaCobotController::linePlaneCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg)
   {
     // We only want to init once
@@ -932,6 +969,37 @@ namespace cobot_experimental_controller
     }
   }
 
+  void PandaCobotController::plane3dCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg)
+  {
+    // We only want to init once
+    if (!plane_3d_init)
+    {
+      plane_3d_points.reserve(msg->points.size());
+      plane_3d_init = true;
+    }
+
+    for (const auto &pt : msg->points)
+    {
+      // Convert geometry_msgs::Point -> Eigen::Vector3d
+      Eigen::Vector3d vec(pt.x, pt.y, pt.z);
+      plane_3d_points.push_back(vec);
+    }
+  }
+
+  void PandaCobotController::plane3dTCallback(const std_msgs::Float64MultiArray::ConstPtr &msg)
+  {
+    for (int i = 0; i < 16; ++i)
+      T_plane_3d(i / 4, i % 4) = msg->data[i];
+  }
+
+  void PandaCobotController::modeSwitchFlagCallback(const std_msgs::UInt8::ConstPtr &msg)
+  {
+    if (msg->data)
+    {
+      mode_switch_flag = 1;
+    }
+  }
+
   std::vector<double> PandaCobotController::readCollisionThreshold(const ros::NodeHandle &nh, const std::string &name, const std::vector<double> &defaults)
   {
     std::vector<double> vals;
@@ -956,47 +1024,6 @@ namespace cobot_experimental_controller
       // ROS_INFO_STREAM("Parameter " << full_name << " not found. Using defaults.");
     }
     return defaults;
-  }
-
-  void PandaCobotController::checkThresholds(const std::array<double, 7> &joint_collision, const std::array<double, 6> &cart_collision)
-  {
-    // First check joint torques
-    for (int i = 0; i < 7; i++)
-    {
-      if (joint_collision[i])
-      {
-        try
-        {
-          franka::Robot robot(robot_address);
-          robot.automaticErrorRecovery();
-          continue;
-        }
-        catch (const std::exception &rec_ex)
-        {
-          ROS_ERROR_STREAM("Robot Recovery Failed: " << rec_ex.what());
-        }
-      }
-      // ROS_INFO_STREAM("Joint " << i << " Torque: " << tau_d(i) << "/" << std::min(upper_torque_acc[i], upper_torque_nom[i]));
-    }
-    // Second check external force
-    std::vector<std::string> forces = {"Fx", "Fy", "Fz", "Rx", "Ry", "Rz"};
-    for (int i = 0; i < 6; i++)
-    {
-      if (cart_collision[i])
-      {
-        try
-        {
-          franka::Robot robot(robot_address);
-          robot.automaticErrorRecovery();
-          continue;
-        }
-        catch (const std::exception &rec_ex)
-        {
-          ROS_ERROR_STREAM("Robot Recovery Failed: " << rec_ex.what());
-        }
-      }
-      // ROS_INFO_STREAM(forces[i] << ": " << f_ext[i] << "/" << std::min(upper_force_acc[i], upper_force_nom[i]));
-    }
   }
 
 } // namespace franka_example_controllers

@@ -53,6 +53,103 @@
                 </rect>
             </property>
         </widget>
+        <!-- Widget for mode selection title -->
+        <widget class="QLabel" name="modeSelectionTitle">
+            <property name="text">
+                <string>Mode Selection</string>
+            </property>
+            <property name="alignment">
+                <set>Qt::AlignCenter</set>
+            </property>
+            <property name="styleSheet">
+                <string>border: 1px solid black; padding: 4px;</string>
+            </property>
+            <property name="geometry">
+                <rect>
+                    <x>10</x>
+                    <y>90</y>
+                    <width>220</width>
+                    <height>30</height>
+                </rect>
+            </property>
+        </widget>
+        <!-- Widget for mode selection-->
+        <widget class="QComboBox" name="modeSelectionBox">
+            <item>
+                <property name="text">
+                    <string>Line</string>
+                </property>
+            </item>
+            <item>
+                <property name="text">
+                    <string>2D Plane</string>
+                </property>
+            </item>
+            <item>
+                <property name="text">
+                    <string>Circle</string>
+                </property>
+            </item>
+            <item>
+                <property name="text">
+                    <string>Spline</string>
+                </property>
+            </item>
+            <item>
+                <property name="text">
+                    <string>3D Plane</string>
+                </property>
+            </item>
+            <property name="geometry">
+                <rect>
+                    <x>10</x>
+                    <y>120</y>
+                    <width>220</width>
+                    <height>30</height>
+                </rect>
+            </property>
+        </widget>
+        <!-- Widget for orientation selection title -->
+        <widget class="QLabel" name="orientationSelectionTitle">
+            <property name="text">
+                <string>Orientation Selection</string>
+            </property>
+            <property name="alignment">
+                <set>Qt::AlignCenter</set>
+            </property>
+            <property name="styleSheet">
+                <string>border: 1px solid black; padding: 4px;</string>
+            </property>
+            <property name="geometry">
+                <rect>
+                    <x>10</x>
+                    <y>160</y>
+                    <width>220</width>
+                    <height>30</height>
+                </rect>
+            </property>
+        </widget>
+        <!-- Widget for orientation selection-->
+        <widget class="QComboBox" name="orientationSelectionBox">
+            <item>
+                <property name="text">
+                    <string>Upright in Workspace</string>
+                </property>
+            </item>
+            <item>
+                <property name="text">
+                    <string>Tangent to Path/Surface</string>
+                </property>
+            </item>
+            <property name="geometry">
+                <rect>
+                    <x>10</x>
+                    <y>190</y>
+                    <width>220</width>
+                    <height>30</height>
+                </rect>
+            </property>
+        </widget>
         <!-- Widget for wrench threshold table title -->
         <widget class="QLabel" name="wrenchTitle">
             <property name="text">

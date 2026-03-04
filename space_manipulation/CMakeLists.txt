@@ -22,8 +22,9 @@ include_directories(
 add_library(${PROJECT_NAME}
   src/line3d.cpp
   src/circle3d.cpp
-  src/plane3d.cpp
+  src/plane2d.cpp
   src/spline3d.cpp
+  src/plane3d.cpp
 )
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
 install(
