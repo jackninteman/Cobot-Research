@@ -139,6 +139,7 @@ add_executable(kdl_test_node src/kdl_test.cpp)
 add_executable(line_rviz_publisher_node src/line_rviz_publisher.cpp)
 add_executable(geometry_publisher_node src/geometry_publisher.cpp)
 add_executable(user_controller_publisher_node src/user_controller_publisher.cpp)
+add_executable(user_keyboard_publisher_node src/user_keyboard_publisher.cpp)
 # add_library({PROJECT_NAME} src/line3d.cpp)
 
 ## Rename C++ executable without prefix
@@ -157,6 +158,7 @@ target_link_libraries(kdl_test_node ${catkin_LIBRARIES})
 target_link_libraries(line_rviz_publisher_node ${catkin_LIBRARIES})
 target_link_libraries(geometry_publisher_node ${catkin_LIBRARIES})
 target_link_libraries(user_controller_publisher_node ${catkin_LIBRARIES})
+target_link_libraries(user_keyboard_publisher_node ${catkin_LIBRARIES})
 # target_link_libraries({PROJECT_NAME} ${catkin_LIBRARIES})
 #############
 ## Install ##
