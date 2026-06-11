@@ -117,6 +117,9 @@ namespace cobot_experimental_controller
     // Setup subscriber to orientation_mode
     orientation_mode_sub = node_handle.subscribe("/orientation_mode", 10, &PandaCobotController::orientationModeCallback, this, ros::TransportHints().reliable().tcpNoDelay());
 
+    // Setup sebscriber to orientation_mode
+    control_mode_sub = node_handle.subscribe("/control_mode", 10, &PandaCobotController::controlModeCallback, this, ros::TransportHints().reliable().tcpNoDelay());
+
     // Setup subscriber to line_plane_points
     line_plane_sub = node_handle.subscribe("/line_plane_points", 10, &PandaCobotController::linePlaneCallback, this, ros::TransportHints().reliable().tcpNoDelay());
 
@@ -348,11 +351,18 @@ namespace cobot_experimental_controller
     Eigen::MatrixXd L_inverse;
     pseudoInverse(L, L_inverse, false);
 
+    Eigen::Vector3d current_position(ee_translation);
+    Eigen::Quaterniond current_orientation(ee_linear);
+
     // -EE Pos: Set Desired and get current ee position and orientation--
     // Call line or plane (or nothing) object methods
     Eigen::Vector3d desired_position;
 #ifdef HYBRID
-    if (hybrid_mode_list[LINE_MODE_IDX] && line_plane_class_init)
+    if (hybrid_mode_list[FREE_MODE_IDX])
+    {
+      desired_position = current_position;
+    }
+    else if (hybrid_mode_list[LINE_MODE_IDX] && line_plane_class_init)
     {
       desired_position = line->GetDesiredCrosstrackLocation(ee_translation, distance_param);
     }
@@ -393,9 +403,6 @@ namespace cobot_experimental_controller
     }
 #endif
 
-    Eigen::Vector3d current_position(ee_translation);
-    Eigen::Quaterniond current_orientation(ee_linear);
-
     // ----------EE Pos: Compute position and orientation error-----------
     Eigen::Matrix<double, 6, 1> error;
     uint8_t pos_error_flag = 0;
@@ -433,7 +440,11 @@ namespace cobot_experimental_controller
     Eigen::Vector3d e_t;
     Eigen::Vector3d e_t_plane;
 #ifdef HYBRID
-    if (hybrid_mode_list[LINE_MODE_IDX] && line_plane_class_init)
+    if (hybrid_mode_list[FREE_MODE_IDX])
+    {
+      e_t << M_PI, 0.0, 0.0;
+    }
+    else if (hybrid_mode_list[LINE_MODE_IDX] && line_plane_class_init)
     {
       e_t = line->GetLineUnitDirection();
     }
@@ -485,13 +496,13 @@ namespace cobot_experimental_controller
     Eigen::Vector3d z_unit = R3_3.col(2);
 
     Eigen::Matrix3d R_des = R3_3;
-    if (rot_mode_list[UPRIGHT_IN_WS])
+    if (rot_mode_list[UPRIGHT_IN_WS_IDX])
     {
       // rotate +180 about x
       Eigen::AngleAxisd rot(M_PI, Eigen::Vector3d::UnitX());
       R_des = rot.toRotationMatrix();
     }
-    else if (rot_mode_list[TANGENT_TO_SHAPE])
+    else if (rot_mode_list[TANGENT_TO_SHAPE_IDX])
     {
       if (z_unit.z() > 0)
       {
@@ -501,6 +512,15 @@ namespace cobot_experimental_controller
         R_des = R3_3 * R_rot;
       }
     }
+
+    Eigen::Isometry3d T_ = Eigen::Isometry3d::Identity();
+    T_.translate(desired_position);
+    T_.rotate(R_des);
+    Eigen::Matrix4d T_des = T_.matrix();
+
+    Eigen::Vector4d current_position_4d(current_position.x(), current_position.y(), current_position.z(), 1.0);
+    Eigen::Vector4d current_position_4d_wall = T_des * current_position_4d;
+    Eigen::Vector3d current_position_wall(current_position_4d_wall(0), current_position_4d_wall(1), current_position_4d_wall(2));
 
     Eigen::Matrix3d R_err = R_des * cur_R.transpose();
     Eigen::AngleAxisd aa(R_err);
@@ -594,14 +614,26 @@ namespace cobot_experimental_controller
     // Only enable stiffness in the ee y-axis in line, circle, or spline modes
     K_switch(1, 1) = hybrid_mode_list[LINE_MODE_IDX] || hybrid_mode_list[CIRCLE_MODE_IDX] ||
                      hybrid_mode_list[SPLINE_MODE_IDX];
+    K_switch(2, 2) = !hybrid_mode_list[FREE_MODE_IDX];
+    if (control_mode_list[WALL_IDX])
+    {
+      if (hybrid_mode_list[PLANE_2D_MODE_IDX] || hybrid_mode_list[PLANE_3D_MODE_IDX])
+      {
+        K_switch(2, 2) = (current_position_wall.z() > -0.01);
+      }
+    }
 
+    K_switch(3, 3) = !hybrid_mode_list[FREE_MODE_IDX];
+    K_switch(4, 4) = !hybrid_mode_list[FREE_MODE_IDX];
+    K_switch(5, 5) = !hybrid_mode_list[FREE_MODE_IDX];
     // Set switching matrix elements for orientation control
-    if (rot_mode_list[TANGENT_TO_SHAPE])
+    if (rot_mode_list[TANGENT_TO_SHAPE_IDX])
     {
       // Turn off rotation about the ee x-axis in line or spline mode
-      K_switch(3, 3) = (!hybrid_mode_list[LINE_MODE_IDX] && !hybrid_mode_list[SPLINE_MODE_IDX]) || pos_error_flag;
-      // Turn off rotation about the ee z-axis in 2D or 3D plane mode
-      K_switch(5, 5) = (!hybrid_mode_list[PLANE_2D_MODE_IDX] && !hybrid_mode_list[PLANE_3D_MODE_IDX]) || pos_error_flag;
+      K_switch(3, 3) = !hybrid_mode_list[FREE_MODE_IDX] && ((!hybrid_mode_list[LINE_MODE_IDX] && !hybrid_mode_list[SPLINE_MODE_IDX]) || pos_error_flag);
+      K_switch(4, 4) = !hybrid_mode_list[FREE_MODE_IDX];
+      // Turn off rotation about the ee z-axis in plane mode
+      K_switch(5, 5) = !hybrid_mode_list[FREE_MODE_IDX] && ((!hybrid_mode_list[PLANE_2D_MODE_IDX] && !hybrid_mode_list[PLANE_3D_MODE_IDX]) || pos_error_flag);
     }
 #endif
 
@@ -916,6 +948,12 @@ namespace cobot_experimental_controller
   {
     // Copy message data into global variable
     rot_mode_list = msg->data;
+  }
+
+  void PandaCobotController::controlModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg)
+  {
+    // Copy message data into global variable
+    control_mode_list = msg->data;
   }
 
   void PandaCobotController::linePlaneCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg)

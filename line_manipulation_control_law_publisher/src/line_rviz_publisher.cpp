@@ -327,7 +327,7 @@ int main(int argc, char **argv)
 #ifdef HYBRID
       const std::vector<uint8_t> &hybrid_mode_list = hybrid_subscriber.getReceivedVector();
 
-      if (hybrid_mode_list.size() == NUM_MODES)
+      if (hybrid_mode_list.size() == NUM_GEO_MODES)
       {
         // geometry_msgs::Point des_p;
         // des_p.x = des_pos.x();
@@ -335,7 +335,27 @@ int main(int argc, char **argv)
         // des_p.z = des_pos.z();
         // des_point.points.push_back(des_p);
         // marker_pub.publish(des_point);
-        if (hybrid_mode_list[LINE_MODE_IDX])
+        if (hybrid_mode_list[FREE_MODE_IDX])
+        {
+          // delete all pre-existing shapes/text
+          delete_marker.id = 0;
+          marker_pub.publish(delete_marker);
+          delete_marker.id = 1;
+          marker_pub.publish(delete_marker);
+          delete_marker.id = 2;
+          marker_pub.publish(delete_marker);
+          delete_marker.id = 3;
+          marker_pub.publish(delete_marker);
+          delete_marker.id = 4;
+          marker_pub.publish(delete_marker);
+          delete_marker.id = 5;
+          marker_pub.publish(delete_marker);
+          delete_marker.id = 6;
+          marker_pub.publish(delete_marker);
+          delete_marker.id = 7;
+          marker_pub.publish(delete_marker);
+        }
+        else if (hybrid_mode_list[LINE_MODE_IDX])
         {
           // delete all pre-existing shapes/text
           delete_marker.id = 0;
@@ -495,7 +515,7 @@ int main(int argc, char **argv)
       }
       else
       {
-        ROS_INFO("ERROR: hybrid mode list is incorrect size. Expected size %d, got size %d", NUM_MODES, static_cast<int>(hybrid_mode_list.size()));
+        ROS_INFO("ERROR: hybrid mode list is incorrect size. Expected size %d, got size %d", NUM_GEO_MODES, static_cast<int>(hybrid_mode_list.size()));
       }
 
 #endif

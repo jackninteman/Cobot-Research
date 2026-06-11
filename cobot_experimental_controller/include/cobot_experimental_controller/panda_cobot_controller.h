@@ -31,22 +31,30 @@ namespace cobot_experimental_controller
 
 #define HYBRID
 
-#define NUM_MODES (5)
+#define NUM_GEO_MODES (6)
 
-#define LINE_MODE_IDX (0)
-#define PLANE_2D_MODE_IDX (1)
-#define CIRCLE_MODE_IDX (2)
-#define SPLINE_MODE_IDX (3)
-#define PLANE_3D_MODE_IDX (4)
+#define FREE_MODE_IDX (0)
+#define LINE_MODE_IDX (1)
+#define PLANE_2D_MODE_IDX (2)
+#define CIRCLE_MODE_IDX (3)
+#define SPLINE_MODE_IDX (4)
+#define PLANE_3D_MODE_IDX (5)
 
-#define DEFAULT_MODE std::vector<uint8_t>({1, 0, 0, 0, 0})
+#define DEFAULT_MODE std::vector<uint8_t>({1, 0, 0, 0, 0, 0})
 
 #define NUM_ROT_MODES (2)
 
-#define UPRIGHT_IN_WS (0)
-#define TANGENT_TO_SHAPE (1)
+#define UPRIGHT_IN_WS_IDX (0)
+#define TANGENT_TO_SHAPE_IDX (1)
 
 #define DEFAULT_ROT_MODE std::vector<uint8_t>({1, 0})
+
+#define NUM_CONTROL_MODES (2)
+
+#define CROSSTRACK_IDX (0)
+#define WALL_IDX (1)
+
+#define DEFAULT_CONTROL_MODE std::vector<uint8_t>({1, 0})
 
   class PandaCobotController : public controller_interface::MultiInterfaceController<
                                    franka_hw::FrankaModelInterface,
@@ -92,9 +100,10 @@ namespace cobot_experimental_controller
     Eigen::Vector3d begin_cartesian_position;
 
     std::vector<uint8_t> hybrid_mode_list = DEFAULT_MODE;
-    int desired_mode_idx = 0;
+    int desired_mode_idx = LINE_MODE_IDX;
 
     std::vector<uint8_t> rot_mode_list = DEFAULT_ROT_MODE;
+    std::vector<uint8_t> control_mode_list = DEFAULT_CONTROL_MODE;
     uint8_t mode_switch_flag = 1;
 
     std::vector<double> lower_torque_acc;
@@ -112,6 +121,7 @@ namespace cobot_experimental_controller
     ros::Subscriber sub_equilibrium_pose_;
     ros::Subscriber hybrid_mode_sub;
     ros::Subscriber orientation_mode_sub;
+    ros::Subscriber control_mode_sub;
     ros::Subscriber line_plane_sub;
     ros::Subscriber circle_sub;
     ros::Subscriber spline_sub;
@@ -139,6 +149,7 @@ namespace cobot_experimental_controller
     void equilibriumPoseCallback(const geometry_msgs::PoseStampedConstPtr &msg);
     void hybridModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg);
     void orientationModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg);
+    void controlModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg);
     void linePlaneCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);
     void circleCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);
     void splineCallback(const cobot_experimental_controller::PointArray::ConstPtr &msg);

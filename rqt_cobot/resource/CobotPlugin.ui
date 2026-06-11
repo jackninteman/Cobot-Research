@@ -77,6 +77,11 @@
         <widget class="QComboBox" name="modeSelectionBox">
             <item>
                 <property name="text">
+                    <string>Free</string>
+                </property>
+            </item>
+            <item>
+                <property name="text">
                     <string>Line</string>
                 </property>
             </item>
@@ -145,6 +150,47 @@
                 <rect>
                     <x>10</x>
                     <y>190</y>
+                    <width>220</width>
+                    <height>30</height>
+                </rect>
+            </property>
+        </widget>
+        <!-- Widget for orientation selection title -->
+        <widget class="QLabel" name="controlSelectionTitle">
+            <property name="text">
+                <string>Control Selection</string>
+            </property>
+            <property name="alignment">
+                <set>Qt::AlignCenter</set>
+            </property>
+            <property name="styleSheet">
+                <string>border: 1px solid black; padding: 4px;</string>
+            </property>
+            <property name="geometry">
+                <rect>
+                    <x>10</x>
+                    <y>230</y>
+                    <width>220</width>
+                    <height>30</height>
+                </rect>
+            </property>
+        </widget>
+        <!-- Widget for orientation selection-->
+        <widget class="QComboBox" name="controlSelectionBox">
+            <item>
+                <property name="text">
+                    <string>Crosstrack Regulation</string>
+                </property>
+            </item>
+            <item>
+                <property name="text">
+                    <string>Wall Regulation</string>
+                </property>
+            </item>
+            <property name="geometry">
+                <rect>
+                    <x>10</x>
+                    <y>260</y>
                     <width>220</width>
                     <height>30</height>
                 </rect>
@@ -238,7 +284,7 @@
             <property name="geometry">
                 <rect>
                     <x>10</x>
-                    <y>260</y>
+                    <y>300</y>
                     <width>1010</width>
                     <height>30</height>
                 </rect>
@@ -269,7 +315,7 @@
             <property name="geometry">
                 <rect>
                     <x>10</x>
-                    <y>290</y>
+                    <y>330</y>
                     <width>1010</width>
                     <height>400</height>
                 </rect>

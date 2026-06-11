@@ -17,7 +17,8 @@ class Signaller(QObject):
     mode_changed = Signal(str)
     time_changed = Signal(str)
     mode_selection = Signal(int)
-    orientation_selction = Signal(int)
+    orientation_selection = Signal(int)
+    control_selection = Signal(int)
     wrench_table_signal = Signal(int, int, float)
     torque_table_signal = Signal(int, int, float)
     error_signal = Signal(str)
@@ -100,7 +101,9 @@ class CobotPlugin(Plugin):
         self._widget.modeSelectionBox.currentIndexChanged.connect(self.on_mode_selection)
         self.signaller.mode_selection.connect(self.on_mode_selection)
         self._widget.orientationSelectionBox.currentIndexChanged.connect(self.on_orientation_selection)
-        self.signaller.orientation_selction.connect(self.on_orientation_selection)
+        self.signaller.orientation_selection.connect(self.on_orientation_selection)
+        self._widget.controlSelectionBox.currentIndexChanged.connect(self.on_control_selection)
+        self.signaller.control_selection.connect(self.on_control_selection)
         self.signaller.wrench_table_signal.connect(self.on_wrench_changed)
         self.signaller.torque_table_signal.connect(self.on_torque_changed)
         self.signaller.error_signal.connect(self.on_error_changed)
@@ -117,7 +120,8 @@ class CobotPlugin(Plugin):
 
         self.mode_pub = rospy.Publisher("/hybrid_mode", UInt8MultiArray, queue_size=1)
         self.mode_text_sub = rospy.Publisher("/hybrid_mode_string", String, queue_size=1)
-        self.orientation_pub = rospy.Publisher("orientation_mode", UInt8MultiArray, queue_size=1)
+        self.orientation_pub = rospy.Publisher("/orientation_mode", UInt8MultiArray, queue_size=1)
+        self.control_pub = rospy.Publisher("/control_mode", UInt8MultiArray, queue_size=1)
 
         # Subscribe to the ROS topics
         self.mode_sub = rospy.Subscriber('/hybrid_mode_string', String, self.hybrid_mode_callback, queue_size=10)
@@ -361,7 +365,7 @@ class CobotPlugin(Plugin):
 
         self.mode_pub.publish(msg)
 
-        mode_strings = ["LINE", "PLANE", "CIRCLE", "SPLINE", "3D PLANE"]
+        mode_strings = ["FREE", "LINE", "PLANE", "CIRCLE", "SPLINE", "3D PLANE"]
         msg = String()
         msg.data = mode_strings[idx]
 
@@ -376,6 +380,16 @@ class CobotPlugin(Plugin):
         msg.data[idx] = 1
 
         self.orientation_pub.publish(msg)
+
+    @Slot(int)
+    def on_control_selection(self, idx):
+        num_modes = self._widget.controlSelectionBox.count()
+
+        msg = UInt8MultiArray()
+        msg.data = [0] * num_modes
+        msg.data[idx] = 1
+
+        self.control_pub.publish(msg)
 
     @Slot(int, int, float)
     def on_wrench_changed(self, row, col, value):

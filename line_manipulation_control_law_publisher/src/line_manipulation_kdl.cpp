@@ -120,6 +120,7 @@ bool plane_3d_class_init = false;
 
 std::vector<uint8_t> hybrid_mode_list = DEFAULT_MODE;
 std::vector<uint8_t> rot_mode_list = DEFAULT_ROT_MODE;
+std::vector<uint8_t> control_mode_list = DEFAULT_CONTROL_MODE;
 uint8_t mode_switch_flag = 1;
 
 // Parameters----------------------------------------------------------
@@ -150,6 +151,8 @@ void fextCallback(const geometry_msgs::Point::ConstPtr &msg);
 void hybridModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg);
 
 void orientationModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg);
+
+void controlModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg);
 
 void linePlaneCallback(const line_manipulation_control_law_publisher::PointArray::ConstPtr &msg);
 
@@ -266,6 +269,9 @@ int main(int argc, char **argv)
 
     // Setup sebscriber to orientation_mode
     ros::Subscriber orientation_mode_sub = ros_node->subscribe("/orientation_mode", 10, orientationModeCallback);
+
+    // Setup sebscriber to orientation_mode
+    ros::Subscriber control_mode_sub = ros_node->subscribe("/control_mode", 10, controlModeCallback);
 
     // Setup subscriber to line_plane_points
     ros::Subscriber line_plane_sub = ros_node->subscribe("/line_plane_points", 10, linePlaneCallback);
@@ -451,11 +457,18 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Matrix3d force_rotation_matrix = Eigen::Map<Eigen::Matrix3d>(force_frame_tf_.M.data);
     force_rotation_matrix = force_rotation_matrix.transpose();
 
+    Eigen::Vector3d current_position(ee_translation);
+    Eigen::Quaterniond current_orientation(ee_linear);
+
     // ----------EE Pos: Set Desired and get current ee position and orientation-------------------
     // 3) Call line, plane, or circle (or nothing) object methods
     Eigen::Vector3d desired_position;
 #ifdef HYBRID
-    if (hybrid_mode_list[LINE_MODE_IDX] && line_plane_class_init)
+    if (hybrid_mode_list[FREE_MODE_IDX])
+    {
+        desired_position = current_position;
+    }
+    else if (hybrid_mode_list[LINE_MODE_IDX] && line_plane_class_init)
     {
 
         desired_position = line->GetDesiredCrosstrackLocation(ee_translation, distance_param);
@@ -495,9 +508,6 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     }
 #endif
 
-    Eigen::Vector3d current_position(ee_translation);
-    Eigen::Quaterniond current_orientation(ee_linear);
-
     // ----------EE Pos: Compute position and orientation error--------------------------------------
     Eigen::Matrix<double, 6, 1> error;
     uint8_t pos_error_flag = 0;
@@ -536,7 +546,11 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Vector3d e_t;
     Eigen::Vector3d e_t_plane;
 #ifdef HYBRID
-    if (hybrid_mode_list[LINE_MODE_IDX] && line_plane_class_init)
+    if (hybrid_mode_list[FREE_MODE_IDX])
+    {
+        e_t << M_PI, 0.0, 0.0;
+    }
+    else if (hybrid_mode_list[LINE_MODE_IDX] && line_plane_class_init)
     {
         e_t = line->GetLineUnitDirection();
         // std::cout << "e_t vector (line)\n"
@@ -602,13 +616,13 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     Eigen::Vector3d z_unit = R3_3.col(2);
 
     Eigen::Matrix3d R_des = R3_3;
-    if (rot_mode_list[UPRIGHT_IN_WS])
+    if (rot_mode_list[UPRIGHT_IN_WS_IDX])
     {
         // rotate +180 about x
         Eigen::AngleAxisd rot(M_PI, Eigen::Vector3d::UnitX());
         R_des = rot.toRotationMatrix();
     }
-    else if (rot_mode_list[TANGENT_TO_SHAPE])
+    else if (rot_mode_list[TANGENT_TO_SHAPE_IDX])
     {
         if (z_unit.z() > 0)
         {
@@ -618,6 +632,15 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
             R_des = R3_3 * R_rot;
         }
     }
+
+    Eigen::Isometry3d T_ = Eigen::Isometry3d::Identity();
+    T_.translate(desired_position);
+    T_.rotate(R_des);
+    Eigen::Matrix4d T_des = T_.matrix();
+
+    Eigen::Vector4d current_position_4d(current_position.x(), current_position.y(), current_position.z(), 1.0);
+    Eigen::Vector4d current_position_4d_wall = T_des * current_position_4d;
+    Eigen::Vector3d current_position_wall(current_position_4d_wall(0), current_position_4d_wall(1), current_position_4d_wall(2));
 
     Eigen::Matrix3d R_err = R_des * cur_R.transpose();
     Eigen::AngleAxisd aa(R_err);
@@ -764,14 +787,26 @@ void ControlLawPublisher(const sensor_msgs::JointState::ConstPtr &jointStatesPtr
     K_switch(0, 0) = 0;
     // Only enable stiffness in the ee y-axis in line, circle, or spline modes
     K_switch(1, 1) = hybrid_mode_list[LINE_MODE_IDX] | hybrid_mode_list[CIRCLE_MODE_IDX] | hybrid_mode_list[SPLINE_MODE_IDX];
+    K_switch(2, 2) = !hybrid_mode_list[FREE_MODE_IDX];
+    if (control_mode_list[WALL_IDX])
+    {
+        if (hybrid_mode_list[PLANE_2D_MODE_IDX] || hybrid_mode_list[PLANE_3D_MODE_IDX])
+        {
+            K_switch(2, 2) = (current_position_wall.z() > -0.01);
+        }
+    }
 
+    K_switch(3, 3) = !hybrid_mode_list[FREE_MODE_IDX];
+    K_switch(4, 4) = !hybrid_mode_list[FREE_MODE_IDX];
+    K_switch(5, 5) = !hybrid_mode_list[FREE_MODE_IDX];
     // Set switching matrix elements for orientation control
-    if (rot_mode_list[TANGENT_TO_SHAPE])
+    if (rot_mode_list[TANGENT_TO_SHAPE_IDX])
     {
         // Turn off rotation about the ee x-axis in line or spline mode
-        K_switch(3, 3) = (!hybrid_mode_list[LINE_MODE_IDX] && !hybrid_mode_list[SPLINE_MODE_IDX]) || pos_error_flag;
+        K_switch(3, 3) = !hybrid_mode_list[FREE_MODE_IDX] && ((!hybrid_mode_list[LINE_MODE_IDX] && !hybrid_mode_list[SPLINE_MODE_IDX]) || pos_error_flag);
+        K_switch(4, 4) = !hybrid_mode_list[FREE_MODE_IDX];
         // Turn off rotation about the ee z-axis in plane mode
-        K_switch(5, 5) = (!hybrid_mode_list[PLANE_2D_MODE_IDX] && !hybrid_mode_list[PLANE_3D_MODE_IDX]) || pos_error_flag;
+        K_switch(5, 5) = !hybrid_mode_list[FREE_MODE_IDX] && ((!hybrid_mode_list[PLANE_2D_MODE_IDX] && !hybrid_mode_list[PLANE_3D_MODE_IDX]) || pos_error_flag);
     }
 #endif
 
@@ -1126,6 +1161,12 @@ void orientationModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg)
 {
     // Copy message data into global variable
     rot_mode_list = msg->data;
+}
+
+void controlModeCallback(const std_msgs::UInt8MultiArray::ConstPtr &msg)
+{
+    // Copy message data into global variable
+    control_mode_list = msg->data;
 }
 
 void linePlaneCallback(const line_manipulation_control_law_publisher::PointArray::ConstPtr &msg)

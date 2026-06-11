@@ -29,7 +29,7 @@ gazebo_msgs::ApplyBodyWrench::Request apply_wrench_req;
 gazebo_msgs::ApplyBodyWrench::Response apply_wrench_resp;
 
 std::vector<uint8_t> hybrid_mode_list = DEFAULT_MODE;
-int desired_mode_idx = LINE_MODE_IDX;
+int desired_mode_idx = FREE_MODE_IDX;
 std_msgs::String cur_mode_string;
 
 // Declare callback function to handle user controller input
@@ -58,7 +58,7 @@ int main(int argc, char **argv)
     hybrid_mode_pub_ = nh->advertise<std_msgs::UInt8MultiArray>("/hybrid_mode", 1);
 
     hybrid_mode_string_pub_ = nh->advertise<std_msgs::String>("/hybrid_mode_string", 1);
-    cur_mode_string.data = MODE_STRINGS[0];
+    cur_mode_string.data = MODE_STRINGS[desired_mode_idx];
 
     f_ext_raw_pub_ = nh->advertise<geometry_msgs::Point>("/f_ext_raw", 10);
 
@@ -152,7 +152,7 @@ void JoystickFeedback(const sensor_msgs::Joy::ConstPtr &joystickhandlePtr_)
     if (flag.data)
     {
         // Update hybrid mode list based on button inputs
-        for (int i = 0; i < NUM_MODES; i++)
+        for (int i = 0; i < NUM_GEO_MODES; i++)
         {
             if (i == desired_mode_idx)
             {
